@@ -1,0 +1,358 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>
+	<title>Mail Filters</title>
+	<id>tag:mail.google.com,2008:filters:1756815677843,z0000001635952786441*6582224817354282068,z0000001635953252188*5310952735815415654,z0000001635953434734*7607342774358978020,z0000001635953524042*7084452640427628108,z0000001637166228270*7927424872992210654,z0000001637166496383*3900421737226511744,z0000001639321360843*2071631823481177029,z0000001639321568541*5443252925877901886,z0000001639321853153*9155423842300301825,z0000001642430781897*1246853514219927441,z0000001642935260313*1358147589252316826,z0000001642935423490*4902320598984181504,z0000001642935555281*2587049378384918338,z0000001643887638722*0752492007607006001,z0000001643888316960*3686582246784101984,z0000001644101916254*3231258124497073274,z0000001647249610321*8707409789967836098,z0000001647249803596*7832703858098595934,z0000001647252195067*6288830466131686492,z0000001647340025962*7386987094699356032,z0000001648023044277*5774158264984376712,z0000001648023678703*7576668542329770406,z0000001648024755653*2677637596395183200,z0000001648189251211*6922592650108313437,z0000001699556700895*6012756462650756209</id>
+	<updated>2026-03-16T12:56:38Z</updated>
+	<author>
+		<name>Carlos Rocha</name>
+		<email>kalrocha.info@gmail.com</email>
+	</author>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:1756815677843</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='mail.notion.so'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='shouldAlwaysMarkAsImportant' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001635952786441*6582224817354282068</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='news@mkt.americanas.com'/>
+		<apps:property name='label' value='[Gmail]/PROMOÇÕES'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverMarkAsImportant' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_promo'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001635953252188*5310952735815415654</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='alerts@englishclass101.com'/>
+		<apps:property name='to' value='kalrocha.info@gmail.com'/>
+		<apps:property name='hasTheWord' value='Word of the day'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001635953434734*7607342774358978020</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='info@ourbusinessnetwork.com'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_promo'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001635953524042*7084452640427628108</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='silvia.calado@medialcare.pt'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='shouldAlwaysMarkAsImportant' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001637166228270*7927424872992210654</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='hasTheWord' value='list:(&lt;75088.1.jradmin.jobrapidoalert.com&gt;)'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_notification'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001637166496383*3900421737226511744</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='mun.montijo.pt@cgi.com'/>
+		<apps:property name='hasTheWord' value='Envio de Fatura Eletrónica'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001639321360843*2071631823481177029</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='lc@opendns.com'/>
+		<apps:property name='hasTheWord' value='opendns'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='shouldNeverMarkAsImportant' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_notification'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001639321568541*5443252925877901886</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='noreply@notify.thinkific.com OR confirmar-envio@amazon.es OR auto-confirm@amazon.es'/>
+		<apps:property name='to' value='kalrocha.info@gmail.com'/>
+		<apps:property name='hasTheWord' value='Tu pedido'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001639321853153*9155423842300301825</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='amazon.es'/>
+		<apps:property name='to' value='kalrocha.info@gmail.com'/>
+		<apps:property name='hasTheWord' value='tu pedido'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001642430781897*1246853514219927441</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='lira@hashtagtreinamentos.com'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001642935260313*1358147589252316826</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='quincy@freecodecamp.org'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001642935423490*4902320598984181504</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='mail@doutoresdoexcel.eadplataforma.com OR doutores@doutoresdoexcel.com.br'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001642935555281*2587049378384918338</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='alert@notify.coursary.com'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001643887638722*0752492007607006001</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='ComunicacoesCartao@clientesfnacpt.caixabankpc.com'/>
+		<apps:property name='subject' value='Extrato Cartão'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001643888316960*3686582246784101984</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='diogo.pe@programadoresbrasil.com.br'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001644101916254*3231258124497073274</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='diogo.pe@programadoresbrasil.com.br'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001647249610321*8707409789967836098</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='alert@indeed.com'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001647249803596*7832703858098595934</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='contato@devsuperior.com Nelio DevSuperior'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001647252195067*6288830466131686492</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='hasTheWord' value='list:(&lt;b1d4370cbbd89e65407e007139e8711df5a4fc2f.google.com&gt;) Digital Garage'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001647340025962*7386987094699356032</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='noreply@cartaocontinente.pt'/>
+		<apps:property name='to' value='kalrocha.info@gmail.com'/>
+		<apps:property name='subject' value='Envio de Fatura Eletrónica'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='shouldAlwaysMarkAsImportant' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001648023044277*5774158264984376712</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='cartaounibanco@unicre.pt OR newsletter@deals.banggood.com OR novedades@amazon.es'/>
+		<apps:property name='label' value='[Gmail]/PROMOÇÕES'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_promo'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001648023678703*7576668542329770406</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='extratos@unicre.pt'/>
+		<apps:property name='subject' value='Extrato'/>
+		<apps:property name='hasTheWord' value='Extrato'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001648024755653*2677637596395183200</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='prime@amazon.es'/>
+		<apps:property name='to' value='kalrocha.info@gmail.com'/>
+		<apps:property name='hasTheWord' value='Metodo de pago, necessita atención'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001648189251211*6922592650108313437</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='noreply@redditmail.com'/>
+		<apps:property name='hasTheWord' value='reedit'/>
+		<apps:property name='label' value='[Gmail]/Redes Sociais'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverMarkAsImportant' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_social'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+	<entry>
+		<category term='filter'></category>
+		<title>Mail Filter</title>
+		<id>tag:mail.google.com,2008:filter:z0000001699556700895*6012756462650756209</id>
+		<updated>2026-03-16T12:56:38Z</updated>
+		<content></content>
+		<apps:property name='from' value='nao-responder@enotas.com.br'/>
+		<apps:property name='label' value='[Gmail]/00_FINANCEIRO'/>
+		<apps:property name='shouldArchive' value='true'/>
+		<apps:property name='shouldNeverSpam' value='true'/>
+		<apps:property name='smartLabelToApply' value='^smartlabel_personal'/>
+		<apps:property name='sizeOperator' value='s_sl'/>
+		<apps:property name='sizeUnit' value='s_smb'/>
+	</entry>
+</feed>
