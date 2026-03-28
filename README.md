@@ -16,12 +16,16 @@ Agente inteligente para organizacao de emails no Gmail com foco em:
   Documentacao funcional e material de apoio.
 - `examples/`
   Arquivos de referencia, como exportacoes de filtros.
+- `python/`
+  Base Python para analise completa, relatorios e futura reclassificacao segura.
 
 ## Arquivos principais
 
 - [src/AgentAppScript.js](/D:/AGENTES-IA/src/AgentAppScript.js)
 - [docs/Documentacao_AgentAppScript.md](/D:/AGENTES-IA/docs/Documentacao_AgentAppScript.md)
+- [docs/PythonAgentSetup.md](/D:/AGENTES-IA/docs/PythonAgentSetup.md)
 - [examples/mailFilters.xml](/D:/AGENTES-IA/examples/mailFilters.xml)
+- [pyproject.toml](/D:/AGENTES-IA/pyproject.toml)
 
 ## Como testar no Google Apps Script
 
@@ -62,3 +66,4 @@ A ordem de confianca e:
 - validar as primeiras regras aprendidas
 - revisar filtros antigos exportados em [examples/mailFilters.xml](/D:/AGENTES-IA/examples/mailFilters.xml)
 - decidir quando habilitar arquivamento automatico
+- executar a base Python em modo `analyze` para inventariar toda a conta antes da reclassificacao em massa

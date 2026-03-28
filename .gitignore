@@ -4,3 +4,13 @@
 .env
 .DS_Store
 Thumbs.db
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+dist/
+build/
+*.pyc
+credentials.json
+token.json
+reports/

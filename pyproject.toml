@@ -1,0 +1,24 @@
+[project]
+name = "gmail-agent"
+version = "0.1.0"
+description = "Ferramenta Python para analisar e reorganizar Gmail e contatos com seguranca."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "google-api-python-client>=2.170.0",
+  "google-auth>=2.39.0",
+  "google-auth-oauthlib>=1.2.0",
+]
+
+[project.scripts]
+gmail-agent = "gmail_agent.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+
+[tool.setuptools.packages.find]
+where = ["python"]
