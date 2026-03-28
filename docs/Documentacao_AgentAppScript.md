@@ -78,7 +78,7 @@ Consulta o aprendizado em varios niveis antes de cair nas heuristicas padrao.
 
 1. Abra [script.google.com](https://script.google.com)
 2. Crie um novo projeto
-3. Cole o conteudo de [AgentAppScript.js](/D:/AGENTES-IA/AgentAppScript.js)
+3. Cole o conteudo de [AgentAppScript.js](/D:/AGENTES-IA/src/AgentAppScript.js)
 4. Salve
 5. Execute `runFirstTimeSetup()` uma vez
 6. Depois use `analyzeInbox()` para revisar os resultados e confirmar o comportamento
