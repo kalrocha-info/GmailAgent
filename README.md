@@ -17,7 +17,7 @@ Agente inteligente para organizacao de emails no Gmail com foco em:
 - `examples/`
   Arquivos de referencia, como exportacoes de filtros.
 - `python/`
-  Base Python para analise completa, relatorios e futura reclassificacao segura.
+  Base Python para analise completa, relatorios, reclassificacao segura e autopilot.
 
 ## Arquivos principais
 
@@ -67,3 +67,11 @@ A ordem de confianca e:
 - revisar filtros antigos exportados em [examples/mailFilters.xml](/D:/AGENTES-IA/examples/mailFilters.xml)
 - decidir quando habilitar arquivamento automatico
 - executar a base Python em modo `analyze` para inventariar toda a conta antes da reclassificacao em massa
+
+## Fluxo Python recomendado
+
+1. Rode `gmail-agent analyze --max-messages 300` para gerar o inventario inicial.
+2. Rode `gmail-agent autopilot-plan` para ver a fila de migracao automatica.
+3. Rode `gmail-agent autopilot-run --cycles 3 --batch-per-label 300` para migrar labels legadas em segundo plano.
+4. Rode `gmail-agent autopilot-report` para revisar o estado consolidado antes da limpeza final.
+5. Rode `gmail-agent cleanup-labels --limit 50` apenas quando o relatorio mostrar labels vazias prontas para exclusao.
