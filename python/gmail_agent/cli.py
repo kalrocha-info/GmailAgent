@@ -9,6 +9,7 @@ from .commands import (
     run_autopilot_report,
     run_cleanup_dry_run,
     run_cleanup_labels,
+    run_maintain_recent,
     run_reclassify,
     run_reclassify_label,
     run_reclassify_dry_run,
@@ -84,6 +85,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("cleanup-dry-run", help="Prepara a futura limpeza sem apagar labels/filtros.")
+
+    maintain_recent = subparsers.add_parser("maintain-recent", help="Classifica emails recentes e aprende com labels AGENTE aplicadas manualmente.")
+    maintain_recent.add_argument(
+        "--limit",
+        type=int,
+        default=300,
+        help="Quantidade maxima de mensagens recentes a revisar por execucao.",
+    )
+    maintain_recent.add_argument(
+        "--recent-days",
+        type=int,
+        default=7,
+        help="Janela de dias usada para reclassificar emails recentes.",
+    )
+    maintain_recent.add_argument(
+        "--learning-days",
+        type=int,
+        default=14,
+        help="Janela de dias usada para aprender com suas decisoes manuais.",
+    )
     return parser
 
 
@@ -126,6 +147,16 @@ def main() -> int:
 
     if args.command == "cleanup-dry-run":
         print(run_cleanup_dry_run())
+        return 0
+
+    if args.command == "maintain-recent":
+        print(
+            run_maintain_recent(
+                limit=args.limit,
+                recent_days=args.recent_days,
+                learning_days=args.learning_days,
+            )
+        )
         return 0
 
     parser.error("Comando invalido.")

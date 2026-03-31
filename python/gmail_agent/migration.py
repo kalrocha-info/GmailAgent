@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from email.utils import parseaddr
 from typing import Any
 
 
@@ -16,6 +17,18 @@ TARGET_LABELS = [
     "AGENTE/NOTIFICACOES",
     "AGENTE/REVISAR",
 ]
+
+ARCHIVE_TARGET_LABELS = {
+    "AGENTE/TRABALHO/VAGAS",
+    "AGENTE/PROMOCOES",
+    "AGENTE/NOTIFICACOES",
+}
+
+STALE_INBOX_ARCHIVE_TARGET_LABELS = {
+    "AGENTE/TRABALHO/VAGAS",
+    "AGENTE/PROMOCOES",
+    "AGENTE/NOTIFICACOES",
+}
 
 EXPLICIT_LABEL_MAPPING = {
     "0_URGENTE": "AGENTE/URGENTE",
@@ -79,8 +92,10 @@ URGENT_TERMS = [
     "access blocked", "acesso bloqueado", "novo dispositivo", "dispositivo autorizado",
     "incumprimento", "payment failed", "failed payment",
     "novo cadastro de dispositivo", "lembrar dos meus dados", "sign-in",
-    "login", "acesso", "security alert", "verification",
+    "login", "security alert", "verification",
     "palavra-passe", "password reset", "reset password", "redefinição da palavra-passe",
+    "verify your device", "verify your location", "unknown device", "browser has been used",
+    "código de verificação", "codigo de verificacao", "please verify your device",
 ]
 
 WORK_TERMS = [
@@ -93,6 +108,10 @@ WORK_TERMS = [
 PROMO_TERMS = [
     "newsletter", "newsletters", "promo", "promoções", "promocoes", "oferta",
     "ofertas", "cupom", "desconto", "sale", "deals", "black friday", "marketing",
+    "power automate", "inscrições abertas", "inscricoes abertas", "acesso vitalício",
+    "acesso vitalicio", "bônus", "bonus", "imersão", "imersao",
+    "python rpa", "dev studio", "hotmart", "udemy", "academy", "data science",
+    "datascience", "excel", "doctor", "doctors", "curso", "formação", "formacao",
 ]
 
 NOTIFICATION_TERMS = [
@@ -105,6 +124,9 @@ NOTIFICATION_TERMS = [
 PERSONAL_TERMS = [
     "agenda", "pessoal", "família", "familia", "mensagem", "wishlist", "lista de desejos",
 ]
+
+LEARNED_SENDER_MAPPING: dict[str, str] = {}
+LEARNED_DOMAIN_MAPPING: dict[str, str] = {}
 
 
 def build_reclassification_plan(report: dict[str, Any]) -> dict[str, Any]:
@@ -150,6 +172,23 @@ def build_reclassification_plan(report: dict[str, Any]) -> dict[str, Any]:
             "Remover labels antigas somente quando houver uma correspondencia clara para AGENTE/...",
             "Manter emails sem mapeamento claro em AGENTE/REVISAR para triagem manual.",
         ],
+    }
+
+
+def apply_learning_state(state: dict[str, Any] | None) -> None:
+    global LEARNED_SENDER_MAPPING, LEARNED_DOMAIN_MAPPING
+
+    sender_rules = (state or {}).get("sender_rules", {})
+    domain_rules = (state or {}).get("domain_rules", {})
+    LEARNED_SENDER_MAPPING = {
+        key.lower(): value["target_label"]
+        for key, value in sender_rules.items()
+        if value.get("target_label")
+    }
+    LEARNED_DOMAIN_MAPPING = {
+        key.lower(): value["target_label"]
+        for key, value in domain_rules.items()
+        if value.get("target_label")
     }
 
 
@@ -213,6 +252,11 @@ def execute_reclassification_plan(
             if label_id and label_id not in remove_label_ids:
                 remove_label_ids.append(label_id)
 
+        if target_label in ARCHIVE_TARGET_LABELS:
+            inbox_label_id = reverse_label_lookup.get("INBOX")
+            if inbox_label_id and inbox_label_id not in remove_label_ids and "INBOX" in existing_label_names:
+                remove_label_ids.append(inbox_label_id)
+
         if not add_label_ids and not remove_label_ids:
             skipped.append(
                 {
@@ -242,6 +286,7 @@ def execute_reclassification_plan(
                 "added_label_ids": add_label_ids,
                 "removed_label_ids": remove_label_ids,
                 "removed_label_names": plan["remove_labels"] + conflicting_agent_labels,
+                "archived_from_inbox": target_label in ARCHIVE_TARGET_LABELS and "INBOX" in existing_label_names,
             }
         )
 
@@ -253,6 +298,90 @@ def execute_reclassification_plan(
             "messages_skipped": len(skipped),
         },
         "changed": changed,
+        "skipped": skipped,
+    }
+
+
+def archive_stale_inbox_messages(
+    gmail_service,
+    report: dict[str, Any],
+    limit: int,
+) -> dict[str, Any]:
+    labels = report.get("labels", [])
+    label_lookup = {label["id"]: label["name"] for label in labels}
+    reverse_label_lookup = {label["name"]: label["id"] for label in labels}
+    inbox_label_id = reverse_label_lookup.get("INBOX")
+    unread_label_name = "UNREAD"
+
+    archived = []
+    skipped = []
+
+    for message in report.get("messages", [])[:limit]:
+        resolved_labels = [label_lookup.get(label_id, label_id) for label_id in message.get("labelIds", [])]
+        if "INBOX" not in resolved_labels:
+            skipped.append(
+                {
+                    "message_id": message.get("id"),
+                    "subject": message.get("subject"),
+                    "reason": "fora da caixa de entrada",
+                }
+            )
+            continue
+        if unread_label_name in resolved_labels:
+            skipped.append(
+                {
+                    "message_id": message.get("id"),
+                    "subject": message.get("subject"),
+                    "reason": "ainda nao lida",
+                }
+            )
+            continue
+
+        if not any(label in STALE_INBOX_ARCHIVE_TARGET_LABELS for label in resolved_labels):
+            skipped.append(
+                {
+                    "message_id": message.get("id"),
+                    "subject": message.get("subject"),
+                    "reason": "label nao elegivel para arquivamento tardio",
+                }
+            )
+            continue
+
+        if not inbox_label_id:
+            skipped.append(
+                {
+                    "message_id": message.get("id"),
+                    "subject": message.get("subject"),
+                    "reason": "label INBOX nao encontrada",
+                }
+            )
+            continue
+
+        gmail_service.users().messages().modify(
+            userId="me",
+            id=message["id"],
+            body={
+                "addLabelIds": [],
+                "removeLabelIds": [inbox_label_id],
+            },
+        ).execute()
+
+        archived.append(
+            {
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "from": message.get("from"),
+                "kept_labels": [label for label in resolved_labels if label.startswith("AGENTE/")],
+            }
+        )
+
+    return {
+        "summary": {
+            "messages_requested": limit,
+            "messages_archived": len(archived),
+            "messages_skipped": len(skipped),
+        },
+        "archived": archived,
         "skipped": skipped,
     }
 
@@ -284,6 +413,12 @@ def infer_target_from_message(message: dict[str, Any], resolved_labels: list[str
     explicit_target = first_explicit_label_target(resolved_labels)
     if explicit_target:
         return explicit_target
+
+    if is_security_urgent(text):
+        return "AGENTE/URGENTE"
+
+    if is_course_promotion(text):
+        return "AGENTE/PROMOCOES"
 
     if contains_any(text, URGENT_TERMS):
         return "AGENTE/URGENTE"
@@ -374,6 +509,15 @@ def ensure_agent_labels(gmail_service, reverse_label_lookup: dict[str, str]) -> 
 def sender_based_target(sender: str, subject: str) -> str | None:
     sender_lower = sender.lower()
     subject_lower = subject.lower()
+    sender_email = parseaddr(sender or "")[1].strip().lower()
+
+    if sender_email and sender_email in LEARNED_SENDER_MAPPING:
+        return LEARNED_SENDER_MAPPING[sender_email]
+
+    if sender_email and "@" in sender_email:
+        sender_domain = sender_email.split("@", 1)[1]
+        if sender_domain in LEARNED_DOMAIN_MAPPING:
+            return LEARNED_DOMAIN_MAPPING[sender_domain]
 
     for needle, target in EXPLICIT_SENDER_MAPPING.items():
         if needle in sender_lower:
@@ -412,6 +556,10 @@ def infer_work_target(text: str) -> str | None:
             "candidaturas",
             "greenhouse",
             "wellhub",
+            "job offer",
+            "hired you",
+            "invitation to interview",
+            "contract has started",
         ],
     ):
         return "AGENTE/TRABALHO/CANDIDATURAS"
@@ -422,3 +570,47 @@ def infer_work_target(text: str) -> str | None:
     if contains_any(text, WORK_TERMS):
         return "AGENTE/TRABALHO/VAGAS"
     return None
+
+
+def is_course_promotion(text: str) -> bool:
+    course_terms = [
+        "python rpa",
+        "udemy",
+        "academy",
+        "bootcamp",
+        "curso",
+        "cursos",
+        "imersão",
+        "imersao",
+        "dev studio",
+        "hotmart",
+        "acesso vitalício",
+        "acesso vitalicio",
+        "inscrições abertas",
+        "inscricoes abertas",
+        "bônus surpresa",
+        "bonus surpresa",
+    ]
+    return contains_any(text, course_terms)
+
+
+def is_security_urgent(text: str) -> bool:
+    security_terms = [
+        "verification code",
+        "código de verificação",
+        "codigo de verificacao",
+        "verify your device",
+        "please verify your device",
+        "verify your location",
+        "unknown device",
+        "browser has been used",
+        "código de login",
+        "codigo de login",
+        "otp",
+        "password reset",
+        "reset password",
+        "redefinição da palavra-passe",
+        "novo cadastro de dispositivo",
+        "security alert",
+    ]
+    return contains_any(text, security_terms)

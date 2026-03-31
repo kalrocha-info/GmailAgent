@@ -77,6 +77,18 @@ Limpeza de labels vazias:
 gmail-agent cleanup-labels --limit 50
 ```
 
+Manutencao continua de emails novos:
+
+```powershell
+gmail-agent maintain-recent --limit 300 --recent-days 7 --learning-days 14
+```
+
+Esse comando:
+- revisa emails recentes
+- aplica labels `AGENTE/...` nos que ainda nao estiverem organizados
+- aprende com as labels `AGENTE/...` que voce aplicou manualmente
+- salva o aprendizado em `state/learned-rules.json`
+
 ## Saidas
 
 Os relatorios sao gerados em `reports/`:
@@ -90,6 +102,9 @@ Os relatorios sao gerados em `reports/`:
 - `autopilot-report-*.json`
 - `autopilot-report-*.md`
 - `reports/autopilot-state.json`
+- `maintain-recent-*.json`
+- `maintain-recent-*.md`
+- `state/learned-rules.json`
 
 ## Seguranca
 
@@ -97,3 +112,13 @@ Os relatorios sao gerados em `reports/`:
 - a migracao continua em lotes controlados e com relatorios locais
 - labels de sistema do Gmail nao devem ser removidas pelo fluxo
 - a limpeza final de labels legadas deve acontecer apenas depois do relatorio confirmar que ficaram vazias
+
+## Agendamento no Windows
+
+Para rodar a cada 60 minutos, use o Agendador de Tarefas do Windows apontando para:
+
+```powershell
+gmail-agent maintain-recent --limit 300 --recent-days 7 --learning-days 14
+```
+
+Se preferir, eu posso te passar depois o comando `schtasks` pronto para criar essa tarefa automaticamente.

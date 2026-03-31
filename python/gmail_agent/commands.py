@@ -16,7 +16,13 @@ from .config import load_config
 from .cleanup import build_label_cleanup_plan, execute_label_cleanup_plan
 from .google_clients import build_gmail_service, build_people_service
 from .inventory import analyze_workspace
-from .migration import build_reclassification_plan, execute_reclassification_plan
+from .learning import rebuild_learning_state, save_learning_state
+from .migration import (
+    apply_learning_state,
+    archive_stale_inbox_messages,
+    build_reclassification_plan,
+    execute_reclassification_plan,
+)
 from .reporting import ensure_reports_dir, utc_stamp, write_json, write_markdown
 
 
@@ -169,6 +175,73 @@ def run_cleanup_labels(limit: int | None) -> str:
     write_json(json_path, result)
     write_markdown(md_path, _render_cleanup_labels_result(result))
     return f"Relatorios gerados:\n- {json_path}\n- {md_path}"
+
+
+def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str:
+    config = load_config()
+    ensure_reports_dir(config.reports_dir)
+    config.state_dir.mkdir(parents=True, exist_ok=True)
+    gmail_service = build_gmail_service(config)
+    people_service = build_people_service(config)
+
+    learning_report = analyze_workspace(
+        gmail_service=gmail_service,
+        people_service=people_service,
+        config=config,
+        max_messages=1000,
+        query=f"newer_than:{learning_days}d",
+        include_filters=False,
+        include_contacts=False,
+    )
+    learning_state = rebuild_learning_state(learning_report)
+    save_learning_state(config.learning_rules_file, learning_state)
+    apply_learning_state(learning_state)
+
+    recent_report = analyze_workspace(
+        gmail_service=gmail_service,
+        people_service=people_service,
+        config=config,
+        max_messages=limit,
+        query=f"newer_than:{recent_days}d",
+        include_filters=False,
+        include_contacts=False,
+    )
+    result = execute_reclassification_plan(
+        gmail_service=gmail_service,
+        report=recent_report,
+        limit=limit,
+    )
+    stale_report = analyze_workspace(
+        gmail_service=gmail_service,
+        people_service=people_service,
+        config=config,
+        max_messages=limit,
+        query="older_than:2d in:inbox -is:unread",
+        include_filters=False,
+        include_contacts=False,
+    )
+    stale_cleanup = archive_stale_inbox_messages(
+        gmail_service=gmail_service,
+        report=stale_report,
+        limit=limit,
+    )
+    payload = {
+        "summary": result.get("summary", {}),
+        "stale_cleanup_summary": stale_cleanup.get("summary", {}),
+        "learning_summary": learning_state.get("summary", {}),
+        "learning_rules_file": str(config.learning_rules_file),
+        "changed": result.get("changed", []),
+        "skipped": result.get("skipped", []),
+        "stale_archived": stale_cleanup.get("archived", []),
+        "stale_skipped": stale_cleanup.get("skipped", []),
+    }
+
+    stamp = utc_stamp()
+    json_path = config.reports_dir / f"maintain-recent-{stamp}.json"
+    md_path = config.reports_dir / f"maintain-recent-{stamp}.md"
+    write_json(json_path, payload)
+    write_markdown(md_path, _render_maintain_recent_result(payload, recent_days, learning_days))
+    return f"Relatorios gerados:\n- {json_path}\n- {md_path}\n- {config.learning_rules_file}"
 
 
 def run_autopilot_plan() -> str:
@@ -380,8 +453,9 @@ def _render_reclassify_result(result: dict) -> str:
     if changed:
         for item in changed[:30]:
             removed = ", ".join(item.get("removed_label_names", [])) or "nenhuma"
+            archived = " e arquivada da caixa de entrada" if item.get("archived_from_inbox") else ""
             lines.append(
-                f"- `{item['subject'] or 'Sem assunto'}` -> aplicada `{item['applied_target_label']}`; removidas `{removed}`"
+                f"- `{item['subject'] or 'Sem assunto'}` -> aplicada `{item['applied_target_label']}`{archived}; removidas `{removed}`"
             )
     else:
         lines.append("- Nenhuma mensagem foi alterada.")
@@ -490,8 +564,9 @@ def _render_reclassify_label_result(result: dict) -> str:
     if changed:
         for item in changed[:30]:
             removed = ", ".join(item.get("removed_label_names", [])) or "nenhuma"
+            archived = " e arquivada da caixa de entrada" if item.get("archived_from_inbox") else ""
             lines.append(
-                f"- `{item['subject'] or 'Sem assunto'}` -> aplicada `{item['applied_target_label']}`; removidas `{removed}`"
+                f"- `{item['subject'] or 'Sem assunto'}` -> aplicada `{item['applied_target_label']}`{archived}; removidas `{removed}`"
             )
     else:
         lines.append("- Nenhuma mensagem foi alterada.")
@@ -502,5 +577,64 @@ def _render_reclassify_label_result(result: dict) -> str:
             lines.append(f"- `{item['subject'] or 'Sem assunto'}` -> {item['reason']}")
     else:
         lines.append("- Nenhuma mensagem foi ignorada.")
+
+    return "\n".join(lines) + "\n"
+
+
+def _render_maintain_recent_result(payload: dict, recent_days: int, learning_days: int) -> str:
+    summary = payload.get("summary", {})
+    stale_summary = payload.get("stale_cleanup_summary", {})
+    learning_summary = payload.get("learning_summary", {})
+    changed = payload.get("changed", [])
+    skipped = payload.get("skipped", [])
+    stale_archived = payload.get("stale_archived", [])
+
+    lines = [
+        "# Manutencao de Emails Recentes",
+        "",
+        f"- Janela de manutencao: ultimos {recent_days} dia(s)",
+        f"- Janela de aprendizado: ultimos {learning_days} dia(s)",
+        f"- Mensagens examinadas: {summary.get('messages_examined', 0)}",
+        f"- Mensagens alteradas: {summary.get('messages_changed', 0)}",
+        f"- Mensagens ignoradas: {summary.get('messages_skipped', 0)}",
+        f"- Mensagens lidas com 2+ dias arquivadas da inbox: {stale_summary.get('messages_archived', 0)}",
+        "",
+        "## Aprendizado aplicado",
+        "",
+        f"- Mensagens recentes consideradas para aprender: {learning_summary.get('messages_considered', 0)}",
+        f"- Mensagens com label AGENTE aproveitadas como decisao manual: {learning_summary.get('messages_with_manual_agent_label', 0)}",
+        f"- Regras por remetente aprendidas: {learning_summary.get('sender_rules', 0)}",
+        f"- Regras por dominio aprendidas: {learning_summary.get('domain_rules', 0)}",
+        "",
+        "## Amostra de mensagens alteradas",
+        "",
+    ]
+
+    if changed:
+        for item in changed[:25]:
+            removed = ", ".join(item.get("removed_label_names", [])) or "nenhuma"
+            archived = " e arquivada da caixa de entrada" if item.get("archived_from_inbox") else ""
+            lines.append(
+                f"- `{item['subject'] or 'Sem assunto'}` -> aplicada `{item['applied_target_label']}`{archived}; removidas `{removed}`"
+            )
+    else:
+        lines.append("- Nenhuma mensagem recente precisou de alteracao.")
+
+    lines.extend(["", "## Amostra de mensagens ignoradas", ""])
+    if skipped:
+        for item in skipped[:15]:
+            lines.append(f"- `{item['subject'] or 'Sem assunto'}` -> {item['reason']}")
+    else:
+        lines.append("- Nenhuma mensagem foi ignorada.")
+
+    lines.extend(["", "## Amostra de arquivamento tardio da inbox", ""])
+    if stale_archived:
+        for item in stale_archived[:20]:
+            labels = ", ".join(item.get("kept_labels", [])) or "nenhuma"
+            lines.append(
+                f"- `{item['subject'] or 'Sem assunto'}` -> arquivada da inbox; mantidas `{labels}`"
+            )
+    else:
+        lines.append("- Nenhuma mensagem lida com 2+ dias precisou sair da inbox nesta execucao.")
 
     return "\n".join(lines) + "\n"

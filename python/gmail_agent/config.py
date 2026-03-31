@@ -10,6 +10,8 @@ class AppConfig:
     credentials_file: Path
     token_file: Path
     reports_dir: Path
+    state_dir: Path
+    learning_rules_file: Path
     gmail_page_size: int = 100
     contact_page_size: int = 200
 
@@ -28,4 +30,6 @@ def load_config() -> AppConfig:
         credentials_file=project_root / "credentials.json",
         token_file=project_root / "token.json",
         reports_dir=project_root / "reports",
+        state_dir=project_root / "state",
+        learning_rules_file=project_root / "state" / "learned-rules.json",
     )

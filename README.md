@@ -75,3 +75,13 @@ A ordem de confianca e:
 3. Rode `gmail-agent autopilot-run --cycles 3 --batch-per-label 300` para migrar labels legadas em segundo plano.
 4. Rode `gmail-agent autopilot-report` para revisar o estado consolidado antes da limpeza final.
 5. Rode `gmail-agent cleanup-labels --limit 50` apenas quando o relatorio mostrar labels vazias prontas para exclusao.
+
+## Manutencao autonoma
+
+Depois da migracao inicial, o comando abaixo serve para manter emails novos classificados e aprender com suas labels `AGENTE/...` aplicadas manualmente:
+
+```powershell
+gmail-agent maintain-recent --limit 300 --recent-days 7 --learning-days 14
+```
+
+O fluxo recomendado e agendar esse comando no Windows para rodar a cada 60 minutos.
