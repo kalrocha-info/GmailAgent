@@ -62,7 +62,7 @@ EXPLICIT_SENDER_MAPPING = {
     "groups-noreply@linkedin.com": "AGENTE/NOTIFICACOES",
     "jobs-noreply@linkedin.com": "AGENTE/TRABALHO/VAGAS",
     "jobalerts-noreply@linkedin.com": "AGENTE/TRABALHO/VAGAS",
-    "newsletters-noreply@linkedin.com": "AGENTE/TRABALHO/VAGAS",
+    "newsletters-noreply@linkedin.com": "AGENTE/NOTIFICACOES",
     "indeed.com": "AGENTE/TRABALHO/VAGAS",
     "infojobs.com.br": "AGENTE/TRABALHO/VAGAS",
     "jobrapidoalert.com": "AGENTE/TRABALHO/VAGAS",
@@ -96,6 +96,7 @@ URGENT_TERMS = [
     "palavra-passe", "password reset", "reset password", "redefinição da palavra-passe",
     "verify your device", "verify your location", "unknown device", "browser has been used",
     "código de verificação", "codigo de verificacao", "please verify your device",
+    "a senha", "senha foi alterada", "password was changed", "password changed",
 ]
 
 WORK_TERMS = [
@@ -112,6 +113,8 @@ PROMO_TERMS = [
     "acesso vitalicio", "bônus", "bonus", "imersão", "imersao",
     "python rpa", "dev studio", "hotmart", "udemy", "academy", "data science",
     "datascience", "excel", "doctor", "doctors", "curso", "formação", "formacao",
+    "ganhe", "convide", "convidando seus amigos", "cartão", "cartao", "cashback",
+    "pré-aprovado", "pre-aprovado", "limite disponível", "limite disponivel",
 ]
 
 NOTIFICATION_TERMS = [
@@ -119,6 +122,13 @@ NOTIFICATION_TERMS = [
     "groups-noreply", "reddit", "community", "grupo",
     "limite mensal", "usage limit", "usage tier", "companion", "limite", "tier update",
     "billing caps", "plan update", "quota",
+    "what's new", "whats new", "vs code", "github copilot", "developer newsletter",
+    "newsletter", "parallel agents", "multi-step planning", "skills",
+    "publicações receberam", "publicacoes receberam", "impressões", "impressoes",
+    "viu seu perfil", "começou a seguir você", "comecou a seguir voce",
+    "pedido está a caminho", "pedido esta a caminho", "tracking", "shipment",
+    "entrega", "out for delivery", "a caminho",
+    "dev news", "openai dev news", "plugins in codex",
 ]
 
 PERSONAL_TERMS = [
@@ -414,11 +424,17 @@ def infer_target_from_message(message: dict[str, Any], resolved_labels: list[str
     if explicit_target:
         return explicit_target
 
+    if is_job_blast(text):
+        return "AGENTE/TRABALHO/VAGAS"
+
     if is_security_urgent(text):
         return "AGENTE/URGENTE"
 
     if is_course_promotion(text):
         return "AGENTE/PROMOCOES"
+
+    if is_technical_newsletter(text):
+        return "AGENTE/NOTIFICACOES"
 
     if contains_any(text, URGENT_TERMS):
         return "AGENTE/URGENTE"
@@ -597,6 +613,7 @@ def is_course_promotion(text: str) -> bool:
 def is_security_urgent(text: str) -> bool:
     security_terms = [
         "verification code",
+        "security code",
         "código de verificação",
         "codigo de verificacao",
         "verify your device",
@@ -612,5 +629,40 @@ def is_security_urgent(text: str) -> bool:
         "redefinição da palavra-passe",
         "novo cadastro de dispositivo",
         "security alert",
+        "código de login",
+        "codigo de login",
     ]
     return contains_any(text, security_terms)
+
+
+def is_technical_newsletter(text: str) -> bool:
+    newsletter_terms = [
+        "what's new",
+        "whats new",
+        "vs code",
+        "github copilot",
+        "parallel agents",
+        "multi-step planning",
+        "developer newsletter",
+        "building ai on the right data foundation",
+        "announcing",
+        "newsletter",
+    ]
+    return contains_any(text, newsletter_terms)
+
+
+def is_job_blast(text: str) -> bool:
+    job_terms = [
+        "vaga",
+        "vagas",
+        "home office",
+        "oportunidades",
+        "candidate-se",
+        "está contratando",
+        "esta contratando",
+        "job",
+        "jobs",
+        "career opportunities",
+        "oportunidade",
+    ]
+    return contains_any(text, job_terms)
