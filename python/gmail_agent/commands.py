@@ -197,15 +197,47 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
     save_learning_state(config.learning_rules_file, learning_state)
     apply_learning_state(learning_state)
 
-    recent_report = analyze_workspace(
+    inbox_report = analyze_workspace(
         gmail_service=gmail_service,
         people_service=people_service,
         config=config,
         max_messages=limit,
-        query=f"newer_than:{recent_days}d",
+        query=f"in:inbox newer_than:{recent_days}d",
         include_filters=False,
         include_contacts=False,
     )
+    recent_report = inbox_report
+
+    inbox_messages = inbox_report.get("messages", [])
+    if len(inbox_messages) < limit:
+        overflow_report = analyze_workspace(
+            gmail_service=gmail_service,
+            people_service=people_service,
+            config=config,
+            max_messages=limit,
+            query=f"newer_than:{recent_days}d",
+            include_filters=False,
+            include_contacts=False,
+        )
+        merged_messages = []
+        seen_ids = set()
+        for message in inbox_messages + overflow_report.get("messages", []):
+            message_id = message.get("id")
+            if not message_id or message_id in seen_ids:
+                continue
+            seen_ids.add(message_id)
+            merged_messages.append(message)
+            if len(merged_messages) >= limit:
+                break
+        recent_report = {
+            **overflow_report,
+            "messages": merged_messages,
+            "summary": {
+                **overflow_report.get("summary", {}),
+                "messages_sampled": len(merged_messages),
+            },
+        }
+
     result = execute_reclassification_plan(
         gmail_service=gmail_service,
         report=recent_report,
