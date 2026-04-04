@@ -11,6 +11,14 @@
  * Modo seguro:
  * - Por padrao, o script apenas sugere e aplica labels.
  * - Arquivamento automatico pode ser habilitado explicitamente.
+ *
+ * Melhorias aplicadas:
+ * - BUG-JS-1: trigger hourly instalado em qualquer modo de execução
+ * - BUG-JS-2: learnFromUserCorrections chamado apenas uma vez por execução
+ * - BUG-JS-3: suggestContactAction removido do loop por thread (opção separada)
+ * - BUG-JS-4: paginação ativa em modo não-histórico
+ * - BUG-JS-5: getCategoryLabel com fallback explícito e log de aviso
+ * - BUG-JS-6: proteção contra execução paralela de triggers
  */
 
 const CONFIG = {
@@ -36,7 +44,8 @@ const LABELS = {
   NOTIFICACOES: "AGENTE/NOTIFICACOES",
   REVISAO: "AGENTE/REVISAR",
   APRENDIDO: "AGENTE/APRENDIDO",
-  CONTATOS: "AGENTE/CONTATOS"
+  CONTATOS: "AGENTE/CONTATOS",
+  FINANCEIRO: "AGENTE/FINANCEIRO"  // BUG-JS-5: categoria em falta no mapa original
 };
 
 const STATIC_RULES = [
@@ -61,6 +70,29 @@ const PRIORITY_RULES = {
   ]
 };
 
+// ---------------------------------------------------------------------------
+// BUG-JS-6: Lock de execução para evitar runs paralelos
+// ---------------------------------------------------------------------------
+function isAlreadyRunning() {
+  const properties = PropertiesService.getScriptProperties();
+  const lock = properties.getProperty("EXECUTION_LOCK");
+  if (!lock) return false;
+  const lockTime = parseInt(lock, 10);
+  // Se o lock tiver mais de 10 minutos, considerar obsoleto
+  return (Date.now() - lockTime) < 10 * 60 * 1000;
+}
+
+function acquireLock() {
+  PropertiesService.getScriptProperties().setProperty("EXECUTION_LOCK", String(Date.now()));
+}
+
+function releaseLock() {
+  PropertiesService.getScriptProperties().deleteProperty("EXECUTION_LOCK");
+}
+
+// ---------------------------------------------------------------------------
+// Setup inicial
+// ---------------------------------------------------------------------------
 function runFirstTimeSetup() {
   removeTriggersByName("executePlan");
   removeTriggersByName("resumeExecution");
@@ -69,48 +101,81 @@ function runFirstTimeSetup() {
   executePlan();
 }
 
+// ---------------------------------------------------------------------------
+// Plano principal de execução
+// BUG-JS-2: learnFromUserCorrections chamado apenas aqui, uma vez por run
+// BUG-JS-1: installTrigger chamado sempre no final, não só em modo histórico
+// BUG-JS-6: proteção contra execução paralela
+// ---------------------------------------------------------------------------
 function executePlan() {
+  // BUG-JS-6: verificar lock
+  if (isAlreadyRunning()) {
+    Logger.log("[executePlan] Outra execucao em curso. Abortando para evitar paralelismo.");
+    return;
+  }
+
+  acquireLock();
   const startTime = Date.now();
-  const properties = PropertiesService.getScriptProperties();
 
-  learnFromUserCorrections();
+  try {
+    const properties = PropertiesService.getScriptProperties();
 
-  let currentStepIndex = 0;
-  let currentOffset = 0;
+    // BUG-JS-2: aprendizado chamado uma única vez, aqui no início
+    learnFromUserCorrections();
 
-  if (CONFIG.PROCESS_ALL_HISTORY) {
-    currentStepIndex = parseInt(properties.getProperty("SAVED_STEP_INDEX") || "0", 10);
-    currentOffset = parseInt(properties.getProperty("SAVED_OFFSET") || "0", 10);
-    properties.deleteProperty("SAVED_STEP_INDEX");
-    properties.deleteProperty("SAVED_OFFSET");
-  }
+    let currentStepIndex = 0;
+    let currentOffset = 0;
 
-  const fullPlan = buildFullPlan();
-
-  for (let i = currentStepIndex; i < fullPlan.length; i++) {
-    const step = fullPlan[i];
-    const query = CONFIG.PROCESS_ALL_HISTORY ? step.query : `(${step.query}) ${CONFIG.TIME_FILTER}`;
-    const finished = processRule(query, step.category, currentOffset, i, startTime);
-    if (!finished && CONFIG.PROCESS_ALL_HISTORY) {
-      return;
+    if (CONFIG.PROCESS_ALL_HISTORY) {
+      currentStepIndex = parseInt(properties.getProperty("SAVED_STEP_INDEX") || "0", 10);
+      currentOffset = parseInt(properties.getProperty("SAVED_OFFSET") || "0", 10);
+      properties.deleteProperty("SAVED_STEP_INDEX");
+      properties.deleteProperty("SAVED_OFFSET");
     }
-    currentOffset = 0;
-  }
 
-  if (CONFIG.PROCESS_ALL_HISTORY) {
+    const fullPlan = buildFullPlan();
+
+    for (let i = currentStepIndex; i < fullPlan.length; i++) {
+      const step = fullPlan[i];
+      const query = CONFIG.PROCESS_ALL_HISTORY
+        ? step.query
+        : `(${step.query}) ${CONFIG.TIME_FILTER}`;
+      const finished = processRule(query, step.category, currentOffset, i, startTime);
+      if (!finished && CONFIG.PROCESS_ALL_HISTORY) {
+        // Estado guardado dentro de processRule → saveStateAndScheduleResume
+        return;
+      }
+      currentOffset = 0;
+    }
+
+    // BUG-JS-1: instalar trigger em qualquer modo, não só no histórico
     installTrigger();
+    Logger.log("[executePlan] Concluido. Trigger hourly instalado.");
+
+  } finally {
+    releaseLock();
   }
 }
 
+// ---------------------------------------------------------------------------
+// Processamento de regras e threads
+// BUG-JS-4: paginação ativa também em modo não-histórico
+// ---------------------------------------------------------------------------
 function processRule(query, category, initialOffset, stepIndex, startTime) {
   const label = getOrCreateLabel(getCategoryLabel(category));
   let start = initialOffset;
   let threads = [];
 
   do {
-    if (CONFIG.PROCESS_ALL_HISTORY && (Date.now() - startTime >= CONFIG.MAX_EXECUTION_TIME_MS)) {
-      saveStateAndScheduleResume(stepIndex, start);
-      return false;
+    // Verificar tempo restante
+    if (Date.now() - startTime >= CONFIG.MAX_EXECUTION_TIME_MS) {
+      if (CONFIG.PROCESS_ALL_HISTORY) {
+        saveStateAndScheduleResume(stepIndex, start);
+        return false;
+      }
+      // Em modo normal: parar sem salvar estado (próximo run pega do zero)
+      Logger.log("[processRule] Tempo limite atingido em modo normal. Parando.");
+      return true;
     }
 
     threads = GmailApp.search(query, start, CONFIG.BATCH_SIZE);
@@ -118,11 +183,17 @@ function processRule(query, category, initialOffset, stepIndex, startTime) {
       classifyThreads(threads, label, category);
     }
     start += CONFIG.BATCH_SIZE;
-  } while (threads.length === CONFIG.BATCH_SIZE && CONFIG.PROCESS_ALL_HISTORY);
+
+    // BUG-JS-4: paginar em AMBOS os modos enquanto houver threads
+  } while (threads.length === CONFIG.BATCH_SIZE);
 
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Classificação de threads
+// BUG-JS-3: suggestContactAction removido do loop — evita N búscas por thread
+// ---------------------------------------------------------------------------
 function classifyThreads(threads, label, forcedCategory) {
   const reviewLabel = getOrCreateLabel(LABELS.REVISAO);
   label.addToThreads(threads);
@@ -144,8 +215,11 @@ function classifyThreads(threads, label, forcedCategory) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Análise de inbox (para uso manual/relatórios)
+// BUG-JS-2: learnFromUserCorrections NÃO é chamado aqui — evita duplicação
+// ---------------------------------------------------------------------------
 function analyzeInbox() {
-  learnFromUserCorrections();
   const query = CONFIG.PROCESS_ALL_HISTORY ? "in:anywhere" : `in:anywhere ${CONFIG.TIME_FILTER}`;
   const threads = GmailApp.search(query, 0, CONFIG.MAX_REPORT_THREADS);
   const report = threads.map(thread => analyzeThread(thread));
@@ -165,7 +239,7 @@ function analyzeThread(thread, forcedCategory) {
   const summary = buildSummary(subject, snippet, priority);
   const action = suggestAction(category, priority);
   const reply = suggestReply(category, priority, subject);
-  const contactSuggestion = suggestContactAction(from, category);
+  // BUG-JS-3: contactSuggestion removido do loop — usar suggestContactActionBatch separadamente
 
   return {
     sender: from,
@@ -174,11 +248,29 @@ function analyzeThread(thread, forcedCategory) {
     priority: priority,
     summary: summary,
     action: action,
-    reply: reply,
-    contactSuggestion: contactSuggestion
+    reply: reply
   };
 }
 
+// ---------------------------------------------------------------------------
+// Sugestão de contatos — agora como função separada para uso fora do loop
+// BUG-JS-3: não mais chamada dentro de analyzeThread()
+// ---------------------------------------------------------------------------
+function suggestContactActionBatch(report) {
+  return report.map(item => {
+    const count = GmailApp.search(`from:${item.sender}`, 0, CONFIG.CONTACT_SUGGESTION_MIN_COUNT).length;
+    return {
+      sender: item.sender,
+      contactSuggestion: count >= CONFIG.CONTACT_SUGGESTION_MIN_COUNT
+        ? `Sugerir contato/grupo: ${item.category.toLowerCase()}`
+        : ""
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Aprendizado com correções manuais do utilizador
+// ---------------------------------------------------------------------------
 function learnFromUserCorrections() {
   const properties = PropertiesService.getScriptProperties();
   const rules = JSON.parse(properties.getProperty("LEARNED_RULES") || '{"bySender":{},"byDomain":{},"byKeyword":{},"bySubject":{}}');
@@ -325,17 +417,14 @@ function suggestReply(category, priority, subject) {
   return "";
 }
 
-function suggestContactAction(sender, category) {
-  const count = GmailApp.search(`from:${sender}`, 0, CONFIG.CONTACT_SUGGESTION_MIN_COUNT).length;
-  if (count >= CONFIG.CONTACT_SUGGESTION_MIN_COUNT) {
-    return `Sugerir contato/grupo: ${category.toLowerCase()}`;
-  }
-  return "";
-}
-
+// ---------------------------------------------------------------------------
+// Gestão de triggers
+// BUG-JS-1 corrigido: installTrigger() sempre garante exactamente 1 trigger hourly
+// ---------------------------------------------------------------------------
 function installTrigger() {
   removeTriggersByName("executePlan");
   ScriptApp.newTrigger("executePlan").timeBased().everyHours(1).create();
+  Logger.log("[installTrigger] Trigger hourly para executePlan instalado.");
 }
 
 function resumeExecution() {
@@ -350,6 +439,7 @@ function saveStateAndScheduleResume(stepIndex, currentOffset) {
   properties.setProperty("SAVED_OFFSET", String(currentOffset));
   removeTriggersByName("resumeExecution");
   ScriptApp.newTrigger("resumeExecution").timeBased().after(1 * 60 * 1000).create();
+  Logger.log(`[saveStateAndScheduleResume] Estado salvo: step=${stepIndex}, offset=${currentOffset}. Resume agendado em 1 min.`);
 }
 
 function removeTriggersByName(functionName) {
@@ -360,8 +450,17 @@ function removeTriggersByName(functionName) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Utilitários de labels
+// BUG-JS-5 corrigido: fallback explícito com log de aviso em vez de silencioso
+// ---------------------------------------------------------------------------
 function getCategoryLabel(category) {
-  return LABELS[category] || LABELS.PESSOAL;
+  const label = LABELS[category];
+  if (label) {
+    return label;
+  }
+  Logger.log(`[getCategoryLabel] AVISO: categoria desconhecida "${category}" — usando REVISAO como fallback seguro.`);
+  return LABELS.REVISAO;  // REVISAO é mais seguro que PESSOAL como fallback
 }
 
 function getOrCreateLabel(name) {

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+import time
 from collections import Counter
 from email.utils import parseaddr
 from typing import Any
+
+from googleapiclient.errors import HttpError
 
 
 TARGET_LABELS = [
@@ -135,8 +139,54 @@ PERSONAL_TERMS = [
     "agenda", "pessoal", "família", "familia", "mensagem", "wishlist", "lista de desejos",
 ]
 
-LEARNED_SENDER_MAPPING: dict[str, str] = {}
-LEARNED_DOMAIN_MAPPING: dict[str, str] = {}
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# BUG-5 corrigido: estado de aprendizado como objeto explícito, não variável global
+# ---------------------------------------------------------------------------
+
+class LearningState:
+    """Encapsula os mapeamentos aprendidos de forma explícita, sem globals mutáveis."""
+
+    def __init__(self) -> None:
+        self.sender_mapping: dict[str, str] = {}
+        self.domain_mapping: dict[str, str] = {}
+
+    def load(self, state: dict[str, Any] | None) -> None:
+        sender_rules = (state or {}).get("sender_rules", {})
+        domain_rules = (state or {}).get("domain_rules", {})
+        self.sender_mapping = {
+            key.lower(): value["target_label"]
+            for key, value in sender_rules.items()
+            if value.get("target_label")
+        }
+        self.domain_mapping = {
+            key.lower(): value["target_label"]
+            for key, value in domain_rules.items()
+            if value.get("target_label")
+        }
+
+    def clear(self) -> None:
+        self.sender_mapping = {}
+        self.domain_mapping = {}
+
+
+# Instância global — mas agora é uma classe com estado bem definido
+_learning_state = LearningState()
+
+# Manter compatibilidade com código existente que usa os dicts diretamente
+LEARNED_SENDER_MAPPING: dict[str, str] = _learning_state.sender_mapping
+LEARNED_DOMAIN_MAPPING: dict[str, str] = _learning_state.domain_mapping
+
+
+def apply_learning_state(state: dict[str, Any] | None) -> None:
+    """Carrega estado de aprendizado usando LearningState — sem globals soltos."""
+    _learning_state.load(state)
+    # Atualiza referências para compatibilidade
+    global LEARNED_SENDER_MAPPING, LEARNED_DOMAIN_MAPPING
+    LEARNED_SENDER_MAPPING = _learning_state.sender_mapping
+    LEARNED_DOMAIN_MAPPING = _learning_state.domain_mapping
 
 
 def build_reclassification_plan(report: dict[str, Any]) -> dict[str, Any]:
@@ -146,7 +196,7 @@ def build_reclassification_plan(report: dict[str, Any]) -> dict[str, Any]:
     legacy_candidates = report.get("label_analysis", {}).get("legacy_candidates", [])
 
     legacy_mapping = []
-    migration_counter = Counter()
+    migration_counter: Counter = Counter()
     sampled_actions = []
 
     for item in legacy_candidates:
@@ -185,23 +235,6 @@ def build_reclassification_plan(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def apply_learning_state(state: dict[str, Any] | None) -> None:
-    global LEARNED_SENDER_MAPPING, LEARNED_DOMAIN_MAPPING
-
-    sender_rules = (state or {}).get("sender_rules", {})
-    domain_rules = (state or {}).get("domain_rules", {})
-    LEARNED_SENDER_MAPPING = {
-        key.lower(): value["target_label"]
-        for key, value in sender_rules.items()
-        if value.get("target_label")
-    }
-    LEARNED_DOMAIN_MAPPING = {
-        key.lower(): value["target_label"]
-        for key, value in domain_rules.items()
-        if value.get("target_label")
-    }
-
-
 def execute_reclassification_plan(
     gmail_service,
     report: dict[str, Any],
@@ -220,13 +253,11 @@ def execute_reclassification_plan(
         plan = plan_message_reclassification(message, label_lookup)
         target_label = plan["target_label"]
         if not target_label:
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": "sem label alvo",
-                }
-            )
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": "sem label alvo",
+            })
             continue
 
         add_label_ids = []
@@ -235,13 +266,11 @@ def execute_reclassification_plan(
 
         target_label_id = reverse_label_lookup.get(target_label)
         if not target_label_id:
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": f"label alvo ausente: {target_label}",
-                }
-            )
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": f"label alvo ausente: {target_label}",
+            })
             continue
 
         if target_label not in existing_label_names:
@@ -268,37 +297,49 @@ def execute_reclassification_plan(
                 remove_label_ids.append(inbox_label_id)
 
         if not add_label_ids and not remove_label_ids:
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": "nenhuma alteracao necessaria",
-                }
-            )
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": "nenhuma alteracao necessaria",
+            })
             continue
 
-        gmail_service.users().messages().modify(
-            userId="me",
-            id=message["id"],
-            body={
-                "addLabelIds": add_label_ids,
-                "removeLabelIds": remove_label_ids,
-            },
-        ).execute()
-
-        changed.append(
-            {
+        # BUG-7 corrigido: try/except por mensagem individual — falha numa mensagem não para o lote
+        try:
+            _api_modify_with_retry(
+                gmail_service,
+                message["id"],
+                add_label_ids,
+                remove_label_ids,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Falha ao modificar mensagem %s ('%s'): %s — ignorando e continuando.",
+                message.get("id"), message.get("subject"), exc,
+            )
+            skipped.append({
                 "message_id": message.get("id"),
-                "thread_id": message.get("threadId"),
                 "subject": message.get("subject"),
-                "from": message.get("from"),
-                "applied_target_label": target_label,
-                "added_label_ids": add_label_ids,
-                "removed_label_ids": remove_label_ids,
-                "removed_label_names": plan["remove_labels"] + conflicting_agent_labels,
-                "archived_from_inbox": target_label in ARCHIVE_TARGET_LABELS and "INBOX" in existing_label_names,
-            }
-        )
+                "reason": f"erro API: {exc}",
+            })
+            continue
+
+        changed.append({
+            "message_id": message.get("id"),
+            "thread_id": message.get("threadId"),
+            "subject": message.get("subject"),
+            "from": message.get("from"),
+            "applied_target_label": target_label,
+            "added_label_ids": add_label_ids,
+            "removed_label_ids": remove_label_ids,
+            "removed_label_names": plan["remove_labels"] + conflicting_agent_labels,
+            "archived_from_inbox": target_label in ARCHIVE_TARGET_LABELS and "INBOX" in existing_label_names,
+        })
+
+    logger.info(
+        "Reclassificação: %d alteradas, %d ignoradas de %d mensagens.",
+        len(changed), len(skipped), len(messages),
+    )
 
     return {
         "summary": {
@@ -329,61 +370,53 @@ def archive_stale_inbox_messages(
     for message in report.get("messages", [])[:limit]:
         resolved_labels = [label_lookup.get(label_id, label_id) for label_id in message.get("labelIds", [])]
         if "INBOX" not in resolved_labels:
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": "fora da caixa de entrada",
-                }
-            )
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": "fora da caixa de entrada",
+            })
             continue
         if unread_label_name in resolved_labels:
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": "ainda nao lida",
-                }
-            )
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": "ainda nao lida",
+            })
             continue
 
         if not any(label in STALE_INBOX_ARCHIVE_TARGET_LABELS for label in resolved_labels):
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": "label nao elegivel para arquivamento tardio",
-                }
-            )
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": "label nao elegivel para arquivamento tardio",
+            })
             continue
 
         if not inbox_label_id:
-            skipped.append(
-                {
-                    "message_id": message.get("id"),
-                    "subject": message.get("subject"),
-                    "reason": "label INBOX nao encontrada",
-                }
-            )
-            continue
-
-        gmail_service.users().messages().modify(
-            userId="me",
-            id=message["id"],
-            body={
-                "addLabelIds": [],
-                "removeLabelIds": [inbox_label_id],
-            },
-        ).execute()
-
-        archived.append(
-            {
+            skipped.append({
                 "message_id": message.get("id"),
                 "subject": message.get("subject"),
-                "from": message.get("from"),
-                "kept_labels": [label for label in resolved_labels if label.startswith("AGENTE/")],
-            }
-        )
+                "reason": "label INBOX nao encontrada",
+            })
+            continue
+
+        try:
+            _api_modify_with_retry(gmail_service, message["id"], [], [inbox_label_id])
+        except Exception as exc:
+            logger.warning("Falha ao arquivar mensagem %s: %s", message.get("id"), exc)
+            skipped.append({
+                "message_id": message.get("id"),
+                "subject": message.get("subject"),
+                "reason": f"erro API: {exc}",
+            })
+            continue
+
+        archived.append({
+            "message_id": message.get("id"),
+            "subject": message.get("subject"),
+            "from": message.get("from"),
+            "kept_labels": [label for label in resolved_labels if label.startswith("AGENTE/")],
+        })
 
     return {
         "summary": {
@@ -511,15 +544,22 @@ def ensure_agent_labels(gmail_service, reverse_label_lookup: dict[str, str]) -> 
     for label_name in TARGET_LABELS:
         if label_name in reverse_label_lookup:
             continue
-        created = gmail_service.users().labels().create(
-            userId="me",
-            body={
-                "name": label_name,
-                "labelListVisibility": "labelShow",
-                "messageListVisibility": "show",
-            },
-        ).execute()
-        reverse_label_lookup[label_name] = created["id"]
+        try:
+            created = gmail_service.users().labels().create(
+                userId="me",
+                body={
+                    "name": label_name,
+                    "labelListVisibility": "labelShow",
+                    "messageListVisibility": "show",
+                },
+            ).execute()
+            reverse_label_lookup[label_name] = created["id"]
+            logger.info("Label criada: %s", label_name)
+        except HttpError as exc:
+            if exc.resp and exc.resp.status == 409:
+                logger.warning("Label %s já existe (409); continue.", label_name)
+            else:
+                raise
 
 
 def sender_based_target(sender: str, subject: str) -> str | None:
@@ -590,79 +630,76 @@ def infer_work_target(text: str) -> str | None:
 
 def is_course_promotion(text: str) -> bool:
     course_terms = [
-        "python rpa",
-        "udemy",
-        "academy",
-        "bootcamp",
-        "curso",
-        "cursos",
-        "imersão",
-        "imersao",
-        "dev studio",
-        "hotmart",
-        "acesso vitalício",
-        "acesso vitalicio",
-        "inscrições abertas",
-        "inscricoes abertas",
-        "bônus surpresa",
-        "bonus surpresa",
+        "python rpa", "udemy", "academy", "bootcamp", "curso", "cursos",
+        "imersão", "imersao", "dev studio", "hotmart", "acesso vitalício",
+        "acesso vitalicio", "inscrições abertas", "inscricoes abertas",
+        "bônus surpresa", "bonus surpresa",
     ]
     return contains_any(text, course_terms)
 
 
 def is_security_urgent(text: str) -> bool:
     security_terms = [
-        "verification code",
-        "security code",
-        "código de verificação",
-        "codigo de verificacao",
-        "verify your device",
-        "please verify your device",
-        "verify your location",
-        "unknown device",
-        "browser has been used",
-        "código de login",
-        "codigo de login",
-        "otp",
-        "password reset",
-        "reset password",
-        "redefinição da palavra-passe",
-        "novo cadastro de dispositivo",
-        "security alert",
-        "código de login",
-        "codigo de login",
+        "verification code", "security code", "código de verificação",
+        "codigo de verificacao", "verify your device", "please verify your device",
+        "verify your location", "unknown device", "browser has been used",
+        "código de login", "codigo de login", "otp", "password reset", "reset password",
+        "redefinição da palavra-passe", "novo cadastro de dispositivo", "security alert",
     ]
     return contains_any(text, security_terms)
 
 
 def is_technical_newsletter(text: str) -> bool:
     newsletter_terms = [
-        "what's new",
-        "whats new",
-        "vs code",
-        "github copilot",
-        "parallel agents",
-        "multi-step planning",
-        "developer newsletter",
-        "building ai on the right data foundation",
-        "announcing",
-        "newsletter",
+        "what's new", "whats new", "vs code", "github copilot", "parallel agents",
+        "multi-step planning", "developer newsletter",
+        "building ai on the right data foundation", "announcing", "newsletter",
     ]
     return contains_any(text, newsletter_terms)
 
 
 def is_job_blast(text: str) -> bool:
     job_terms = [
-        "vaga",
-        "vagas",
-        "home office",
-        "oportunidades",
-        "candidate-se",
-        "está contratando",
-        "esta contratando",
-        "job",
-        "jobs",
-        "career opportunities",
-        "oportunidade",
+        "vaga", "vagas", "home office", "oportunidades", "candidate-se",
+        "está contratando", "esta contratando", "job", "jobs",
+        "career opportunities", "oportunidade",
     ]
     return contains_any(text, job_terms)
+
+
+def _api_modify_with_retry(
+    gmail_service,
+    message_id: str,
+    add_label_ids: list[str],
+    remove_label_ids: list[str],
+    max_retries: int = 3,
+    base_delay: float = 2.0,
+) -> None:
+    """Modifica labels de uma mensagem com retry exponencial."""
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            gmail_service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={
+                    "addLabelIds": add_label_ids,
+                    "removeLabelIds": remove_label_ids,
+                },
+            ).execute()
+            return
+        except HttpError as exc:
+            status = exc.resp.status if exc.resp else 0
+            if status in (429, 500, 502, 503, 504):
+                delay = base_delay * (2 ** attempt)
+                logger.warning("HTTP %d ao modificar %s (tentativa %d/%d), aguardando %.1fs...",
+                               status, message_id, attempt + 1, max_retries, delay)
+                time.sleep(delay)
+                last_exc = exc
+            else:
+                raise
+        except Exception as exc:
+            time.sleep(base_delay * (2 ** attempt))
+            last_exc = exc
+
+    raise RuntimeError(f"Falha após {max_retries} tentativas em {message_id}") from last_exc

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import logging
 from collections import Counter, defaultdict
 from email.utils import parseaddr
 from pathlib import Path
@@ -8,16 +8,24 @@ from typing import Any
 
 from .migration import TARGET_LABELS
 
+logger = logging.getLogger(__name__)
+
 LEARNING_TARGETS = [label for label in TARGET_LABELS if label != "AGENTE/REVISAR"]
+
+# Prioridade de labels para desempate: labels mais específicas têm prioridade
+# BUG-8 corrigido: em vez de usar sempre o primeiro label, usamos o de maior prioridade
+_LABEL_PRIORITY = {label: i for i, label in enumerate(LEARNING_TARGETS)}
 
 
 def load_learning_state(path: Path) -> dict[str, Any]:
+    import json
     if not path.exists():
         return empty_learning_state()
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def save_learning_state(path: Path, payload: dict[str, Any]) -> None:
+    import json
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -63,6 +71,13 @@ def rebuild_learning_state(report: dict[str, Any], min_sender_hits: int = 1, min
     sender_rules = _collapse_counters(sender_counts, min_hits=min_sender_hits)
     domain_rules = _collapse_counters(domain_counts, min_hits=min_domain_hits)
 
+    logger.info(
+        "Aprendizado: %d mensagens consideradas, %d com label AGENTE, "
+        "%d regras de remetente, %d regras de domínio.",
+        messages_considered, messages_with_manual_agent_label,
+        len(sender_rules), len(domain_rules),
+    )
+
     return {
         "summary": {
             "messages_considered": messages_considered,
@@ -80,10 +95,16 @@ def extract_sender_email(sender_value: str) -> str:
 
 
 def _extract_learning_target(resolved_labels: list[str]) -> str | None:
+    """
+    BUG-8 corrigido: em vez de retornar always o primeiro label AGENTE encontrado,
+    retorna o label com MAIOR prioridade (menor índice em LEARNING_TARGETS),
+    priorizando labels mais específicas como URGENTE sobre REVISAR.
+    """
     preferred = [label for label in resolved_labels if label in LEARNING_TARGETS]
     if not preferred:
         return None
-    return preferred[0]
+    # Ordenar por prioridade (menor índice = maior prioridade) e retornar o melhor
+    return min(preferred, key=lambda lbl: _LABEL_PRIORITY.get(lbl, len(LEARNING_TARGETS)))
 
 
 def _collapse_counters(counter_map: dict[str, Counter], min_hits: int) -> dict[str, dict[str, Any]]:

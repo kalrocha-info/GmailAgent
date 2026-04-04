@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import logging
+import time
 from collections import Counter
 from collections import defaultdict
 from typing import Any
 
+from googleapiclient.errors import HttpError
+
 from .config import AppConfig
+
+logger = logging.getLogger(__name__)
+
+# Labels cujos detalhes (messagesTotal, etc.) são necessários.
+# Para outras, usamos apenas o id/name da listagem geral.
+_LABEL_DETAIL_BATCH_LIMIT = 200  # segurança: nunca mais de 200 chamadas individuais
 
 
 def analyze_workspace(
@@ -17,6 +27,10 @@ def analyze_workspace(
     include_filters: bool = True,
     include_contacts: bool = True,
 ) -> dict[str, Any]:
+    logger.info(
+        "Iniciando análise: max_messages=%d, query=%r, label_ids=%r",
+        max_messages, query, label_ids,
+    )
     labels = fetch_labels(gmail_service)
     filters = fetch_filters(gmail_service) if include_filters else []
     messages = fetch_messages(gmail_service, max_messages, query=query, label_ids=label_ids)
@@ -28,6 +42,11 @@ def analyze_workspace(
     label_analysis = analyze_labels(labels, label_usage)
     filter_analysis = analyze_filters(filters, label_lookup)
     proposed_structure = build_proposed_structure(label_analysis, filter_analysis)
+
+    logger.info(
+        "Análise concluída: %d mensagens, %d labels, %d filtros, %d contatos",
+        len(messages), len(labels), len(filters), len(contacts),
+    )
 
     return {
         "summary": {
@@ -50,37 +69,81 @@ def analyze_workspace(
 
 
 def fetch_labels(gmail_service) -> list[dict[str, Any]]:
-    response = gmail_service.users().labels().list(userId="me").execute()
+    """
+    BUG-3 corrigido: busca a lista de labels em uma chamada e enriquece com detalhes
+    apenas as labels de utilizador (user labels), reduzindo o N+1 de chamadas.
+    Labels de sistema geralmente não têm messagesTotal útil e podem ser ignoradas.
+    """
+    response = _api_call_with_retry(
+        lambda: gmail_service.users().labels().list(userId="me").execute()
+    )
     labels = response.get("labels", [])
+
     detailed = []
+    fetched = 0
     for item in labels:
-        full = gmail_service.users().labels().get(userId="me", id=item.get("id")).execute()
-        detailed.append(
-            {
-                "id": full.get("id"),
-                "name": full.get("name"),
-                "type": full.get("type"),
-                "messagesTotal": full.get("messagesTotal", 0),
-                "messagesUnread": full.get("messagesUnread", 0),
-                "threadsTotal": full.get("threadsTotal", 0),
-                "threadsUnread": full.get("threadsUnread", 0),
-            }
+        label_type = item.get("type", "")
+        # Labels de sistema não precisam de chamada individual
+        if label_type == "system":
+            detailed.append({
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "type": label_type,
+                "messagesTotal": 0,
+                "messagesUnread": 0,
+                "threadsTotal": 0,
+                "threadsUnread": 0,
+            })
+            continue
+
+        if fetched >= _LABEL_DETAIL_BATCH_LIMIT:
+            logger.warning(
+                "Limite de %d labels detalhadas atingido; labels restantes sem detalhes.",
+                _LABEL_DETAIL_BATCH_LIMIT,
+            )
+            detailed.append({
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "type": label_type,
+                "messagesTotal": 0,
+                "messagesUnread": 0,
+                "threadsTotal": 0,
+                "threadsUnread": 0,
+            })
+            continue
+
+        full = _api_call_with_retry(
+            lambda lid=item.get("id"): gmail_service.users().labels().get(
+                userId="me", id=lid
+            ).execute()
         )
+        fetched += 1
+        detailed.append({
+            "id": full.get("id"),
+            "name": full.get("name"),
+            "type": full.get("type"),
+            "messagesTotal": full.get("messagesTotal", 0),
+            "messagesUnread": full.get("messagesUnread", 0),
+            "threadsTotal": full.get("threadsTotal", 0),
+            "threadsUnread": full.get("threadsUnread", 0),
+        })
+
+    logger.info("Labels carregadas: %d total, %d com detalhes.", len(detailed), fetched)
     return detailed
 
 
 def fetch_filters(gmail_service) -> list[dict[str, Any]]:
-    response = gmail_service.users().settings().filters().list(userId="me").execute()
+    response = _api_call_with_retry(
+        lambda: gmail_service.users().settings().filters().list(userId="me").execute()
+    )
     filters = response.get("filter", [])
     normalized = []
     for item in filters:
-        normalized.append(
-            {
-                "id": item.get("id"),
-                "criteria": item.get("criteria", {}),
-                "action": item.get("action", {}),
-            }
-        )
+        normalized.append({
+            "id": item.get("id"),
+            "criteria": item.get("criteria", {}),
+            "action": item.get("action", {}),
+        })
     return normalized
 
 
@@ -105,15 +168,19 @@ def fetch_messages(
         if label_ids:
             kwargs["labelIds"] = label_ids
 
-        response = gmail_service.users().messages().list(**kwargs).execute()
+        response = _api_call_with_retry(
+            lambda kw=kwargs: gmail_service.users().messages().list(**kw).execute()
+        )
 
         for message in response.get("messages", []):
-            full = gmail_service.users().messages().get(
-                userId="me",
-                id=message["id"],
-                format="metadata",
-                metadataHeaders=["From", "Subject", "Date"],
-            ).execute()
+            full = _api_call_with_retry(
+                lambda mid=message["id"]: gmail_service.users().messages().get(
+                    userId="me",
+                    id=mid,
+                    format="metadata",
+                    metadataHeaders=["From", "Subject", "Date"],
+                ).execute()
+            )
             collected.append(normalize_message(full))
             if len(collected) >= max_messages:
                 break
@@ -122,40 +189,54 @@ def fetch_messages(
         if not page_token:
             break
 
+    logger.info("Mensagens carregadas: %d", len(collected))
     return collected
 
 
-def fetch_contacts(people_service, page_size: int) -> list[dict[str, Any]]:
+def fetch_contacts(people_service, page_size: int, max_contacts: int = 2000) -> list[dict[str, Any]]:
+    """
+    BUG-6 corrigido: limite de segurança para evitar loop infinito em contas
+    com milhares de contatos ou em caso de tokens de paginação corrompidos.
+    """
     contacts = []
     page_token = None
+    pages_fetched = 0
+    max_pages = max(1, max_contacts // page_size) + 1  # segurança
 
-    while True:
-        response = (
-            people_service.people()
+    while len(contacts) < max_contacts:
+        if pages_fetched >= max_pages:
+            logger.warning(
+                "Limite de segurança de %d páginas de contatos atingido; parando paginação.",
+                max_pages,
+            )
+            break
+
+        response = _api_call_with_retry(
+            lambda pt=page_token: people_service.people()
             .connections()
             .list(
                 resourceName="people/me",
-                pageSize=page_size,
-                pageToken=page_token,
+                pageSize=min(page_size, max_contacts - len(contacts)),
+                pageToken=pt,
                 personFields="names,emailAddresses,organizations,memberships",
             )
             .execute()
         )
+        pages_fetched += 1
 
         for person in response.get("connections", []):
-            contacts.append(
-                {
-                    "resourceName": person.get("resourceName"),
-                    "names": [item.get("displayName") for item in person.get("names", []) if item.get("displayName")],
-                    "emails": [item.get("value") for item in person.get("emailAddresses", []) if item.get("value")],
-                    "organizations": [item.get("name") for item in person.get("organizations", []) if item.get("name")],
-                }
-            )
+            contacts.append({
+                "resourceName": person.get("resourceName"),
+                "names": [item.get("displayName") for item in person.get("names", []) if item.get("displayName")],
+                "emails": [item.get("value") for item in person.get("emailAddresses", []) if item.get("value")],
+                "organizations": [item.get("name") for item in person.get("organizations", []) if item.get("name")],
+            })
 
         page_token = response.get("nextPageToken")
         if not page_token:
             break
 
+    logger.info("Contatos carregados: %d", len(contacts))
     return contacts
 
 
@@ -176,7 +257,7 @@ def normalize_message(message: dict[str, Any]) -> dict[str, Any]:
 
 
 def count_label_usage(messages: list[dict[str, Any]]) -> Counter:
-    counter = Counter()
+    counter: Counter = Counter()
     for message in messages:
         for label_id in message.get("labelIds", []):
             counter[label_id] += 1
@@ -186,20 +267,18 @@ def count_label_usage(messages: list[dict[str, Any]]) -> Counter:
 def resolve_label_usage(label_usage: Counter, label_lookup: dict[str, str]) -> list[dict[str, Any]]:
     resolved = []
     for label_id, count in sorted(label_usage.items(), key=lambda item: (-item[1], item[0])):
-        resolved.append(
-            {
-                "id": label_id,
-                "name": label_lookup.get(label_id, label_id),
-                "count": count,
-            }
-        )
+        resolved.append({
+            "id": label_id,
+            "name": label_lookup.get(label_id, label_id),
+            "count": count,
+        })
     return resolved
 
 
 def analyze_labels(labels: list[dict[str, Any]], label_usage: Counter) -> dict[str, Any]:
     user_labels = [label for label in labels if label.get("type") == "user"]
     system_labels = [label for label in labels if label.get("type") == "system"]
-    by_prefix = defaultdict(list)
+    by_prefix: dict[str, list] = defaultdict(list)
 
     for label in user_labels:
         name = label["name"]
@@ -253,9 +332,9 @@ def analyze_labels(labels: list[dict[str, Any]], label_usage: Counter) -> dict[s
 
 
 def analyze_filters(filters: list[dict[str, Any]], label_lookup: dict[str, str]) -> dict[str, Any]:
-    grouped = defaultdict(list)
-    action_counter = Counter()
-    from_counter = Counter()
+    grouped: dict[str, list] = defaultdict(list)
+    action_counter: Counter = Counter()
+    from_counter: Counter = Counter()
 
     for item in filters:
         normalized = normalize_filter(item, label_lookup)
@@ -410,3 +489,38 @@ def _is_legacy_label_name(name: str) -> bool:
         "IA/",
     )
     return name.startswith(prefixes)
+
+
+def _api_call_with_retry(fn, max_retries: int = 3, base_delay: float = 2.0):
+    """
+    BUG-4 / MELHORIA-2: Executa uma chamada à API com retry exponencial
+    para erros transitórios (429 rate limit, 500/503 server errors).
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except HttpError as exc:
+            status = exc.resp.status if exc.resp else 0
+            if status in (429, 500, 502, 503, 504):
+                delay = base_delay * (2 ** attempt)
+                logger.warning(
+                    "Erro HTTP %d na chamada à API (tentativa %d/%d). Aguardando %.1fs...",
+                    status, attempt + 1, max_retries, delay,
+                )
+                time.sleep(delay)
+                last_exc = exc
+            else:
+                # Erros permanentes (401, 403, 404): não faz sentido retentear
+                logger.error("Erro HTTP %d permanente na API: %s", status, exc)
+                raise
+        except Exception as exc:
+            logger.warning(
+                "Erro genérico na chamada à API (tentativa %d/%d): %s",
+                attempt + 1, max_retries, exc,
+            )
+            time.sleep(base_delay * (2 ** attempt))
+            last_exc = exc
+
+    logger.error("Todas as %d tentativas falharam. Último erro: %s", max_retries, last_exc)
+    raise RuntimeError(f"API call failed after {max_retries} retries") from last_exc

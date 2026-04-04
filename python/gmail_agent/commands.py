@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from .autopilot import (
@@ -14,7 +15,7 @@ from .autopilot import (
 )
 from .config import load_config
 from .cleanup import build_label_cleanup_plan, execute_label_cleanup_plan
-from .google_clients import build_gmail_service, build_people_service
+from .google_clients import build_all_services
 from .inventory import analyze_workspace
 from .learning import rebuild_learning_state, save_learning_state
 from .migration import (
@@ -25,12 +26,36 @@ from .migration import (
 )
 from .reporting import ensure_reports_dir, utc_stamp, write_json, write_markdown
 
+logger = logging.getLogger(__name__)
+
+
+def run_health_check() -> str:
+    """Verifica se o token OAuth está válido e a conexão à API Gmail funciona."""
+    config = load_config()
+    logger.info("Iniciando health check...")
+    try:
+        gmail_service, _ = build_all_services(config)
+        profile = gmail_service.users().getProfile(userId="me").execute()
+        email = profile.get("emailAddress", "desconhecido")
+        total = profile.get("messagesTotal", 0)
+        result = (
+            f"✅ Health check OK\n"
+            f"   Conta: {email}\n"
+            f"   Total de mensagens: {total}\n"
+            f"   Token: válido"
+        )
+        logger.info("Health check OK: %s (%d mensagens)", email, total)
+        return result
+    except Exception as exc:
+        result = f"❌ Health check FALHOU: {exc}"
+        logger.error("Health check falhou: %s", exc)
+        return result
+
 
 def run_analyze(max_messages: int) -> tuple[Path, Path]:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = analyze_workspace(
         gmail_service=gmail_service,
@@ -50,8 +75,7 @@ def run_analyze(max_messages: int) -> tuple[Path, Path]:
 def run_reclassify_dry_run(limit: int) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = analyze_workspace(
         gmail_service=gmail_service,
@@ -72,8 +96,7 @@ def run_reclassify_dry_run(limit: int) -> str:
 def run_cleanup_dry_run() -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = analyze_workspace(
         gmail_service=gmail_service,
@@ -95,8 +118,7 @@ def run_cleanup_dry_run() -> str:
 def run_reclassify(limit: int) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = analyze_workspace(
         gmail_service=gmail_service,
@@ -121,8 +143,7 @@ def run_reclassify(limit: int) -> str:
 def run_reclassify_label(label_name: str, limit: int) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     query = f'label:"{label_name}"'
     report = analyze_workspace(
@@ -156,8 +177,7 @@ def run_reclassify_label(label_name: str, limit: int) -> str:
 def run_cleanup_labels(limit: int | None) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = analyze_workspace(
         gmail_service=gmail_service,
@@ -181,8 +201,11 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
     config = load_config()
     ensure_reports_dir(config.reports_dir)
     config.state_dir.mkdir(parents=True, exist_ok=True)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    logger.info(
+        "run_maintain_recent: limit=%d, recent_days=%d, learning_days=%d",
+        limit, recent_days, learning_days,
+    )
+    gmail_service, people_service = build_all_services(config)
 
     learning_report = analyze_workspace(
         gmail_service=gmail_service,
@@ -279,8 +302,7 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
 def run_autopilot_plan() -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = build_autopilot_snapshot(
         gmail_service=gmail_service,
@@ -300,8 +322,7 @@ def run_autopilot_plan() -> str:
 def run_autopilot_command(cycles: int, batch_per_label: int) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     result = run_autopilot(
         gmail_service=gmail_service,
@@ -324,8 +345,7 @@ def run_autopilot_command(cycles: int, batch_per_label: int) -> str:
 def run_autopilot_report() -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
-    gmail_service = build_gmail_service(config)
-    people_service = build_people_service(config)
+    gmail_service, people_service = build_all_services(config)
 
     report = build_autopilot_snapshot(
         gmail_service=gmail_service,
