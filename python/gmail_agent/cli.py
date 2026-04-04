@@ -237,3 +237,6 @@ def main() -> int:
     finally:
         sys.stdout.flush()
         sys.stderr.flush()
+
+if __name__ == "__main__":
+    sys.exit(main())
