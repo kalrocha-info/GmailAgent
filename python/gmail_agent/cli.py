@@ -16,6 +16,7 @@ from .commands import (
     run_reclassify,
     run_reclassify_label,
     run_reclassify_dry_run,
+    run_generate_filters,
 )
 
 
@@ -134,6 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("cleanup-dry-run", help="Prepara a futura limpeza sem apagar labels/filtros.")
 
+    subparsers.add_parser("generate-filters", help="Gera um arquivo XML de filtros para importacao nativa no Gmail.")
+
     maintain_recent = subparsers.add_parser("maintain-recent", help="Classifica emails recentes e aprende com labels AGENTE aplicadas manualmente.")
     maintain_recent.add_argument(
         "--limit",
@@ -206,6 +209,10 @@ def main() -> int:
 
         if args.command == "cleanup-dry-run":
             print(run_cleanup_dry_run(), flush=True)
+            return 0
+
+        if args.command == "generate-filters":
+            print(run_generate_filters(), flush=True)
             return 0
 
         if args.command == "maintain-recent":

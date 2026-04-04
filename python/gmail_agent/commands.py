@@ -690,3 +690,18 @@ def _render_maintain_recent_result(payload: dict, recent_days: int, learning_day
         lines.append("- Nenhuma mensagem lida com 2+ dias precisou sair da inbox nesta execucao.")
 
     return "\n".join(lines) + "\n"
+
+
+def run_generate_filters() -> str:
+    from .filters import build_filters_xml
+    from .reporting import ensure_reports_dir, utc_stamp
+    
+    config = load_config()
+    ensure_reports_dir(config.reports_dir)
+    stamp = utc_stamp()
+    xml_path = config.reports_dir / f"filters-{stamp}.xml"
+    
+    xml_content = build_filters_xml(config)
+    xml_path.write_text(xml_content, encoding="utf-8")
+    
+    return f"Filtros gerados com sucesso e prontos para importacao no Gmail!\n- {xml_path}"
