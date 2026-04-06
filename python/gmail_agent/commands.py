@@ -15,7 +15,7 @@ from .autopilot import (
 )
 from .config import load_config
 from .cleanup import build_label_cleanup_plan, execute_label_cleanup_plan
-from .google_clients import build_all_services
+from .google_clients import build_all_services, build_gmail_service
 from .inventory import analyze_workspace
 from .learning import rebuild_learning_state, save_learning_state
 from .migration import (
@@ -205,11 +205,11 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
         "run_maintain_recent: limit=%d, recent_days=%d, learning_days=%d",
         limit, recent_days, learning_days,
     )
-    gmail_service, people_service = build_all_services(config)
+    gmail_service = build_gmail_service(config)
 
     learning_report = analyze_workspace(
         gmail_service=gmail_service,
-        people_service=people_service,
+        people_service=None,
         config=config,
         max_messages=1000,
         query=f"newer_than:{learning_days}d",
@@ -222,7 +222,7 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
 
     inbox_report = analyze_workspace(
         gmail_service=gmail_service,
-        people_service=people_service,
+        people_service=None,
         config=config,
         max_messages=limit,
         query=f"in:inbox newer_than:{recent_days}d",
@@ -235,7 +235,7 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
     if len(inbox_messages) < limit:
         overflow_report = analyze_workspace(
             gmail_service=gmail_service,
-            people_service=people_service,
+            people_service=None,
             config=config,
             max_messages=limit,
             query=f"newer_than:{recent_days}d",
@@ -268,7 +268,7 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
     )
     stale_report = analyze_workspace(
         gmail_service=gmail_service,
-        people_service=people_service,
+        people_service=None,
         config=config,
         max_messages=limit,
         query="older_than:2d in:inbox -is:unread",

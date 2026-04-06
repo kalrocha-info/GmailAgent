@@ -1,13 +1,19 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = "D:\AGENTES-IA"
+$pythonModuleRoot = Join-Path $projectRoot "python"
 $stateDir = Join-Path $projectRoot "state"
 $logPath = Join-Path $stateDir "maintain-recent.log"
 $heartbeatPath = Join-Path $stateDir "maintain-recent-heartbeat.json"
 $lockPath = Join-Path $stateDir "maintain-recent.lock"
 $stdoutPath = Join-Path $stateDir "maintain-recent.stdout.log"
 $stderrPath = Join-Path $stateDir "maintain-recent.stderr.log"
-$pythonPath = "C:\Users\kalro\AppData\Local\Programs\Python\Python314\python.exe"
+$pythonCandidates = @(
+    (Join-Path $projectRoot ".venv\Scripts\python.exe"),
+    "C:\Users\kalro\AppData\Local\Programs\Python\Python314\python.exe",
+    "C:\Users\kalro\AppData\Local\Programs\Python\Python313\python.exe",
+    "C:\Users\kalro\AppData\Local\Programs\Python\Python312\python.exe"
+)
 $pythonArgs = @("-u", "-m", "gmail_agent.cli", "maintain-recent", "--limit", "300", "--recent-days", "60", "--learning-days", "14")
 $timeoutSeconds = 1500
 $staleLockMinutes = 120
@@ -47,6 +53,21 @@ function Clear-Lock {
     }
 }
 
+function Resolve-PythonPath {
+    foreach ($candidate in $pythonCandidates) {
+        if ($candidate -and (Test-Path $candidate)) {
+            return $candidate
+        }
+    }
+
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonCommand -and $pythonCommand.Source) {
+        return $pythonCommand.Source
+    }
+
+    return $null
+}
+
 function Append-FileToLog {
     param([string]$FilePath, [string]$Label)
     if (Test-Path $FilePath) {
@@ -81,35 +102,40 @@ try {
     # Assim garantimos que stderr e stdout são sempre capturados
 
     # --- Verificar que o Python existe ---
-    if (-not (Test-Path $pythonPath)) {
-        Write-Log "ERRO: Python nao encontrado em $pythonPath"
-        Write-Heartbeat -Status "error" -Message "Python not found at $pythonPath" -ExitCode 1
+    $pythonPath = Resolve-PythonPath
+    if (-not $pythonPath) {
+        Write-Log "ERRO: Python nao encontrado. Caminhos testados: $($pythonCandidates -join '; ')"
+        Write-Heartbeat -Status "error" -Message "Python not found in expected locations." -ExitCode 1
         exit 1
     }
 
     Write-Log "Python: $pythonPath"
     Write-Log "Args: $($pythonArgs -join ' ')"
 
-    # --- Lançar processo ---
-    $process = Start-Process `
-        -FilePath $pythonPath `
-        -ArgumentList $pythonArgs `
-        -WorkingDirectory $projectRoot `
-        -RedirectStandardOutput $stdoutPath `
-        -RedirectStandardError $stderrPath `
-        -PassThru `
-        -NoNewWindow
+    # Garantir que o pacote local python/gmail_agent seja resolvido
+    $env:PYTHONPATH = $pythonModuleRoot
+    Write-Log "PYTHONPATH: $env:PYTHONPATH"
 
-    Write-Log "Processo iniciado (PID $($process.Id)). Timeout: ${timeoutSeconds}s."
-    Write-Heartbeat -Status "running" -Message "Process started (PID $($process.Id))."
+    # --- Lançar processo de forma direta para preservar $LASTEXITCODE ---
+    Write-Log "Executando processo diretamente via PowerShell."
+    Write-Heartbeat -Status "running" -Message "Process started."
 
-    # --- Aguardar com timeout ---
-    $finished = $process.WaitForExit($timeoutSeconds * 1000)
+    $job = Start-Job -ScriptBlock {
+        param($ResolvedPythonPath, $ResolvedArgs, $ResolvedProjectRoot, $ResolvedStdoutPath, $ResolvedStderrPath, $ResolvedPythonPathEnv)
+        Set-Location $ResolvedProjectRoot
+        $env:PYTHONPATH = $ResolvedPythonPathEnv
+        & $ResolvedPythonPath @ResolvedArgs 1>> $ResolvedStdoutPath 2>> $ResolvedStderrPath
+        return $LASTEXITCODE
+    } -ArgumentList $pythonPath, $pythonArgs, $projectRoot, $stdoutPath, $stderrPath, $pythonModuleRoot
+
+    Write-Log "Processo iniciado (JobId $($job.Id)). Timeout: ${timeoutSeconds}s."
+
+    $finished = Wait-Job -Id $job.Id -Timeout $timeoutSeconds
 
     if (-not $finished) {
-        Write-Log "TIMEOUT: maintain-recent excedeu ${timeoutSeconds}s; encerrando processo."
-        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 500  # dar tempo ao processo para encerrar
+        Write-Log "TIMEOUT: maintain-recent excedeu ${timeoutSeconds}s; encerrando job."
+        Stop-Job -Id $job.Id -ErrorAction SilentlyContinue
+        Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
 
         Append-FileToLog -FilePath $stdoutPath -Label "STDOUT (timeout)"
         Append-FileToLog -FilePath $stderrPath -Label "STDERR (timeout)"
@@ -118,19 +144,20 @@ try {
         exit 124
     }
 
-    # --- MELHORIA-4: Capturar stdout e stderr SEMPRE, mesmo em sucesso ---
+    $jobState = Get-Job -Id $job.Id
+    $jobResult = Receive-Job -Id $job.Id -Keep
+
     Append-FileToLog -FilePath $stdoutPath -Label "STDOUT"
     Append-FileToLog -FilePath $stderrPath -Label "STDERR"
 
-    # --- Obter exit code com fallback explícito ---
-    # BUG PS1 corrigido: $process.ExitCode pode ser $null em edge cases;
-    # usar Refresh() para garantir que o valor está atualizado
-    $process.Refresh()
-    $exitCode = $process.ExitCode
-    if ($null -eq $exitCode) {
-        Write-Log "AVISO: Exit code nulo (processo pode ter sido encerrado externamente). Assumindo 1."
+    $exitCode = 0
+    if ($jobState.State -ne "Completed") {
         $exitCode = 1
+    } elseif ($null -ne $jobResult -and $jobResult.Count -gt 0) {
+        $exitCode = [int]($jobResult | Select-Object -Last 1)
     }
+
+    Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
 
     Write-Log "Exit code: $exitCode"
 
