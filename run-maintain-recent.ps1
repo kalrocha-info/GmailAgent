@@ -79,6 +79,14 @@ function Append-FileToLog {
     }
 }
 
+function Get-FileContentSafe {
+    param([string]$FilePath)
+    if (Test-Path $FilePath) {
+        return (Get-Content $FilePath -Raw -Encoding utf8)
+    }
+    return ""
+}
+
 try {
     # --- Verificar lock ---
     if (Test-Path $lockPath) {
@@ -97,9 +105,9 @@ try {
     Write-Log "Iniciando maintain-recent"
     Write-Heartbeat -Status "running" -Message "Starting maintain-recent."
 
-    # --- Limpar logs anteriores (mas guardar, não apagar silenciosamente) ---
-    # MELHORIA-4: não apagamos antes de correr — sobrescrevemos depois
-    # Assim garantimos que stderr e stdout são sempre capturados
+    # --- Reiniciar os arquivos desta execução para evitar mistura com erros antigos ---
+    Set-Content -Path $stdoutPath -Value "" -Encoding utf8
+    Set-Content -Path $stderrPath -Value "" -Encoding utf8
 
     # --- Verificar que o Python existe ---
     $pythonPath = Resolve-PythonPath
@@ -147,6 +155,9 @@ try {
     $jobState = Get-Job -Id $job.Id
     $jobResult = Receive-Job -Id $job.Id -Keep
 
+    $stdoutContent = Get-FileContentSafe -FilePath $stdoutPath
+    $stderrContent = Get-FileContentSafe -FilePath $stderrPath
+
     Append-FileToLog -FilePath $stdoutPath -Label "STDOUT"
     Append-FileToLog -FilePath $stderrPath -Label "STDERR"
 
@@ -161,8 +172,14 @@ try {
 
     Write-Log "Exit code: $exitCode"
 
+    $combinedOutput = "$stdoutContent`n$stderrContent"
+
     if ($exitCode -ne 0) {
-        Write-Heartbeat -Status "error" -Message "maintain-recent terminou com erro (exit $exitCode)." -ExitCode $exitCode
+        if ($combinedOutput -match "invalid_grant" -or $combinedOutput -match "Token OAuth inv.+ revogado") {
+            Write-Heartbeat -Status "reauth_required" -Message "Token OAuth expirado ou revogado. Renove D:\AGENTES-IA\token.json executando o agente manualmente." -ExitCode $exitCode
+        } else {
+            Write-Heartbeat -Status "error" -Message "maintain-recent terminou com erro (exit $exitCode)." -ExitCode $exitCode
+        }
     } else {
         Write-Heartbeat -Status "completed" -Message "maintain-recent completed." -ExitCode $exitCode
     }
