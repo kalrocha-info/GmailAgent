@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+if ($null -ne (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 
 $projectRoot = "D:\AGENTES-IA"
 $pythonModuleRoot = Join-Path $projectRoot "python"
@@ -9,10 +12,11 @@ $lockPath = Join-Path $stateDir "maintain-recent.lock"
 $stdoutPath = Join-Path $stateDir "maintain-recent.stdout.log"
 $stderrPath = Join-Path $stateDir "maintain-recent.stderr.log"
 $pythonCandidates = @(
-    (Join-Path $projectRoot ".venv\Scripts\python.exe"),
+    "C:\Python313\python.exe",
     "C:\Users\kalro\AppData\Local\Programs\Python\Python314\python.exe",
     "C:\Users\kalro\AppData\Local\Programs\Python\Python313\python.exe",
-    "C:\Users\kalro\AppData\Local\Programs\Python\Python312\python.exe"
+    "C:\Users\kalro\AppData\Local\Programs\Python\Python312\python.exe",
+    (Join-Path $projectRoot ".venv\Scripts\python.exe")
 )
 $pythonArgs = @("-u", "-m", "gmail_agent.cli", "maintain-recent", "--limit", "300", "--recent-days", "60", "--learning-days", "14")
 $timeoutSeconds = 1500
@@ -122,38 +126,21 @@ try {
 
     # Garantir que o pacote local python/gmail_agent seja resolvido
     $env:PYTHONPATH = $pythonModuleRoot
+    $env:GMAIL_AGENT_INTERACTIVE_REAUTH = "1"
     Write-Log "PYTHONPATH: $env:PYTHONPATH"
 
-    # --- Lançar processo de forma direta para preservar $LASTEXITCODE ---
+    # --- Executar processo síncrono com Start-Process; evita Start-Job e erros nativos do PowerShell ---
     Write-Log "Executando processo diretamente via PowerShell."
     Write-Heartbeat -Status "running" -Message "Process started."
 
-    $job = Start-Job -ScriptBlock {
-        param($ResolvedPythonPath, $ResolvedArgs, $ResolvedProjectRoot, $ResolvedStdoutPath, $ResolvedStderrPath, $ResolvedPythonPathEnv)
-        Set-Location $ResolvedProjectRoot
-        $env:PYTHONPATH = $ResolvedPythonPathEnv
-        & $ResolvedPythonPath @ResolvedArgs 1>> $ResolvedStdoutPath 2>> $ResolvedStderrPath
-        return $LASTEXITCODE
-    } -ArgumentList $pythonPath, $pythonArgs, $projectRoot, $stdoutPath, $stderrPath, $pythonModuleRoot
-
-    Write-Log "Processo iniciado (JobId $($job.Id)). Timeout: ${timeoutSeconds}s."
-
-    $finished = Wait-Job -Id $job.Id -Timeout $timeoutSeconds
-
-    if (-not $finished) {
-        Write-Log "TIMEOUT: maintain-recent excedeu ${timeoutSeconds}s; encerrando job."
-        Stop-Job -Id $job.Id -ErrorAction SilentlyContinue
-        Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
-
-        Append-FileToLog -FilePath $stdoutPath -Label "STDOUT (timeout)"
-        Append-FileToLog -FilePath $stderrPath -Label "STDERR (timeout)"
-
-        Write-Heartbeat -Status "timeout" -Message "Process exceeded timeout and was terminated." -ExitCode 124
-        exit 124
-    }
-
-    $jobState = Get-Job -Id $job.Id
-    $jobResult = Receive-Job -Id $job.Id -Keep
+    $proc = Start-Process -FilePath $pythonPath `
+        -ArgumentList $pythonArgs `
+        -WorkingDirectory $projectRoot `
+        -NoNewWindow `
+        -PassThru `
+        -Wait `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath
 
     $stdoutContent = Get-FileContentSafe -FilePath $stdoutPath
     $stderrContent = Get-FileContentSafe -FilePath $stderrPath
@@ -161,14 +148,10 @@ try {
     Append-FileToLog -FilePath $stdoutPath -Label "STDOUT"
     Append-FileToLog -FilePath $stderrPath -Label "STDERR"
 
-    $exitCode = 0
-    if ($jobState.State -ne "Completed") {
+    $exitCode = $proc.ExitCode
+    if ($null -eq $exitCode) {
         $exitCode = 1
-    } elseif ($null -ne $jobResult -and $jobResult.Count -gt 0) {
-        $exitCode = [int]($jobResult | Select-Object -Last 1)
     }
-
-    Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
 
     Write-Log "Exit code: $exitCode"
 
@@ -177,6 +160,8 @@ try {
     if ($exitCode -ne 0) {
         if ($combinedOutput -match "invalid_grant" -or $combinedOutput -match "Token OAuth inv.+ revogado") {
             Write-Heartbeat -Status "reauth_required" -Message "Token OAuth expirado ou revogado. Renove D:\AGENTES-IA\token.json executando o agente manualmente." -ExitCode $exitCode
+        } elseif ($combinedOutput -match "OAUTH_NETWORK_BLOCKED" -or $combinedOutput -match "Sem conex.+o de rede para renovar o token OAuth" -or $combinedOutput -match "WinError 10013") {
+            Write-Heartbeat -Status "network_blocked" -Message "Rede bloqueada ao renovar token OAuth. Verifique firewall, proxy, antivírus ou política de rede." -ExitCode $exitCode
         } else {
             Write-Heartbeat -Status "error" -Message "maintain-recent terminou com erro (exit $exitCode)." -ExitCode $exitCode
         }
