@@ -9,8 +9,6 @@ $stateDir = Join-Path $projectRoot "state"
 $logPath = Join-Path $stateDir "maintain-recent.log"
 $heartbeatPath = Join-Path $stateDir "maintain-recent-heartbeat.json"
 $lockPath = Join-Path $stateDir "maintain-recent.lock"
-$stdoutPath = Join-Path $stateDir "maintain-recent.stdout.log"
-$stderrPath = Join-Path $stateDir "maintain-recent.stderr.log"
 $pythonCandidates = @(
     "C:\Python313\python.exe",
     "C:\Users\kalro\AppData\Local\Programs\Python\Python314\python.exe",
@@ -21,12 +19,18 @@ $pythonCandidates = @(
 $pythonArgs = @("-u", "-m", "gmail_agent.cli", "maintain-recent", "--limit", "300", "--recent-days", "60", "--learning-days", "14")
 $timeoutSeconds = 1500
 $staleLockMinutes = 120
+$tempLogRetentionDays = 7
 
 if (-not (Test-Path $stateDir)) {
     New-Item -ItemType Directory -Path $stateDir | Out-Null
 }
 
 Set-Location $projectRoot
+
+$lockAcquired = $false
+$runId = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+$stdoutPath = Join-Path $stateDir "maintain-recent.$runId.stdout.log"
+$stderrPath = Join-Path $stateDir "maintain-recent.$runId.stderr.log"
 
 function Write-Log {
     param([string]$Message)
@@ -54,6 +58,20 @@ function Write-Heartbeat {
 function Clear-Lock {
     if (Test-Path $lockPath) {
         Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-OldTempLogs {
+    $cutoff = (Get-Date).AddDays(-$tempLogRetentionDays)
+    $patterns = @(
+        "maintain-recent.*.stdout.log",
+        "maintain-recent.*.stderr.log"
+    )
+
+    foreach ($pattern in $patterns) {
+        Get-ChildItem -Path $stateDir -Filter $pattern -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -lt $cutoff } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -91,6 +109,8 @@ function Get-FileContentSafe {
     return ""
 }
 
+Clear-OldTempLogs
+
 try {
     # --- Verificar lock ---
     if (Test-Path $lockPath) {
@@ -106,12 +126,9 @@ try {
 
     # --- Criar lock ---
     "running $(Get-Date -Format 's')" | Set-Content -Path $lockPath -Encoding utf8
+    $lockAcquired = $true
     Write-Log "Iniciando maintain-recent"
     Write-Heartbeat -Status "running" -Message "Starting maintain-recent."
-
-    # --- Reiniciar os arquivos desta execução para evitar mistura com erros antigos ---
-    Set-Content -Path $stdoutPath -Value "" -Encoding utf8
-    Set-Content -Path $stderrPath -Value "" -Encoding utf8
 
     # --- Verificar que o Python existe ---
     $pythonPath = Resolve-PythonPath
@@ -181,5 +198,7 @@ catch {
     exit 1
 }
 finally {
-    Clear-Lock
+    if ($lockAcquired) {
+        Clear-Lock
+    }
 }

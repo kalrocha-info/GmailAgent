@@ -173,14 +173,26 @@ def fetch_messages(
         )
 
         for message in response.get("messages", []):
-            full = _api_call_with_retry(
-                lambda mid=message["id"]: gmail_service.users().messages().get(
-                    userId="me",
-                    id=mid,
-                    format="metadata",
-                    metadataHeaders=["From", "Subject", "Date"],
-                ).execute()
-            )
+            try:
+                full = _api_call_with_retry(
+                    lambda mid=message["id"]: gmail_service.users().messages().get(
+                        userId="me",
+                        id=mid,
+                        format="metadata",
+                        metadataHeaders=["From", "Subject", "Date"],
+                    ).execute()
+                )
+            except HttpError as exc:
+                status = exc.resp.status if exc.resp else 0
+                if status in (400, 404):
+                    logger.warning(
+                        "Ignorando mensagem %s por erro HTTP %d ao carregar metadata: %s",
+                        message.get("id"),
+                        status,
+                        exc,
+                    )
+                    continue
+                raise
             collected.append(normalize_message(full))
             if len(collected) >= max_messages:
                 break

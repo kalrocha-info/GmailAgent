@@ -28,12 +28,6 @@ ARCHIVE_TARGET_LABELS = {
     "AGENTE/NOTIFICACOES",
 }
 
-STALE_INBOX_ARCHIVE_TARGET_LABELS = {
-    "AGENTE/TRABALHO/VAGAS",
-    "AGENTE/PROMOCOES",
-    "AGENTE/NOTIFICACOES",
-}
-
 EXPLICIT_LABEL_MAPPING = {
     "0_URGENTE": "AGENTE/URGENTE",
     "[Gmail]/SEGURANÇA": "AGENTE/URGENTE",
@@ -384,11 +378,12 @@ def archive_stale_inbox_messages(
             })
             continue
 
-        if not any(label in STALE_INBOX_ARCHIVE_TARGET_LABELS for label in resolved_labels):
+        kept_agent_labels = [label for label in resolved_labels if label.startswith("AGENTE/")]
+        if not kept_agent_labels:
             skipped.append({
                 "message_id": message.get("id"),
                 "subject": message.get("subject"),
-                "reason": "label nao elegivel para arquivamento tardio",
+                "reason": "sem label AGENTE para arquivamento tardio",
             })
             continue
 
@@ -415,7 +410,7 @@ def archive_stale_inbox_messages(
             "message_id": message.get("id"),
             "subject": message.get("subject"),
             "from": message.get("from"),
-            "kept_labels": [label for label in resolved_labels if label.startswith("AGENTE/")],
+            "kept_labels": kept_agent_labels,
         })
 
     return {
