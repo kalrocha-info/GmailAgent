@@ -174,6 +174,33 @@ def run_reclassify_label(label_name: str, limit: int) -> str:
     return f"Relatorios gerados:\n- {json_path}\n- {md_path}"
 
 
+def run_reclassify_query(query: str, limit: int) -> str:
+    config = load_config()
+    ensure_reports_dir(config.reports_dir)
+    gmail_service, people_service = build_all_services(config)
+
+    report = analyze_workspace(
+        gmail_service=gmail_service,
+        people_service=people_service,
+        config=config,
+        max_messages=limit,
+        query=query,
+    )
+    result = execute_reclassification_plan(
+        gmail_service=gmail_service,
+        report=report,
+        limit=limit,
+    )
+    result["source_query"] = query
+
+    stamp = utc_stamp()
+    json_path = config.reports_dir / f"reclassify-query-{stamp}.json"
+    md_path = config.reports_dir / f"reclassify-query-{stamp}.md"
+    write_json(json_path, result)
+    write_markdown(md_path, _render_reclassify_result(result))
+    return f"Relatorios gerados:\n- {json_path}\n- {md_path}"
+
+
 def run_cleanup_labels(limit: int | None) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
@@ -226,7 +253,7 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
         config=config,
         max_messages=limit,
         query=f"in:inbox newer_than:{recent_days}d",
-        include_filters=False,
+        include_filters=True,
         include_contacts=False,
     )
     recent_report = inbox_report
@@ -239,7 +266,7 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
             config=config,
             max_messages=limit,
             query=f"newer_than:{recent_days}d",
-            include_filters=False,
+            include_filters=True,
             include_contacts=False,
         )
         merged_messages = []
@@ -266,19 +293,20 @@ def run_maintain_recent(limit: int, recent_days: int, learning_days: int) -> str
         report=recent_report,
         limit=limit,
     )
+    stale_limit = max(limit * 3, 1000)
     stale_report = analyze_workspace(
         gmail_service=gmail_service,
         people_service=None,
         config=config,
-        max_messages=limit,
-        query="older_than:2d in:inbox -is:unread",
+        max_messages=stale_limit,
+        query=f"older_than:2d newer_than:{recent_days}d in:inbox -is:unread",
         include_filters=False,
         include_contacts=False,
     )
     stale_cleanup = archive_stale_inbox_messages(
         gmail_service=gmail_service,
         report=stale_report,
-        limit=limit,
+        limit=stale_limit,
     )
     payload = {
         "summary": result.get("summary", {}),
@@ -649,12 +677,13 @@ def _render_maintain_recent_result(payload: dict, recent_days: int, learning_day
         f"- Mensagens examinadas: {summary.get('messages_examined', 0)}",
         f"- Mensagens alteradas: {summary.get('messages_changed', 0)}",
         f"- Mensagens ignoradas: {summary.get('messages_skipped', 0)}",
+        f"- Regras derivadas de filtros consideradas: {summary.get('filter_rules_considered', 0)}",
         f"- Mensagens lidas com 2+ dias arquivadas da inbox: {stale_summary.get('messages_archived', 0)}",
         "",
         "## Aprendizado aplicado",
         "",
         f"- Mensagens recentes consideradas para aprender: {learning_summary.get('messages_considered', 0)}",
-        f"- Mensagens com label AGENTE aproveitadas como decisao manual: {learning_summary.get('messages_with_manual_agent_label', 0)}",
+        f"- Mensagens com label de classificacao aproveitadas como decisao manual: {learning_summary.get('messages_with_manual_agent_label', 0)}",
         f"- Regras por remetente aprendidas: {learning_summary.get('sender_rules', 0)}",
         f"- Regras por dominio aprendidas: {learning_summary.get('domain_rules', 0)}",
         "",
@@ -705,3 +734,39 @@ def run_generate_filters() -> str:
     xml_path.write_text(xml_content, encoding="utf-8")
     
     return f"Filtros gerados com sucesso e prontos para importacao no Gmail!\n- {xml_path}"
+
+
+def run_apply_filters(replace_existing: bool) -> str:
+    from .filters import apply_filters
+
+    config = load_config()
+    gmail_service = build_gmail_service(config)
+    result = apply_filters(gmail_service, config=config, replace_existing=replace_existing)
+
+    stamp = utc_stamp()
+    json_path = config.reports_dir / f"apply-filters-{stamp}.json"
+    md_path = config.reports_dir / f"apply-filters-{stamp}.md"
+    write_json(json_path, result)
+    write_markdown(md_path, _render_apply_filters_result(result))
+    return f"Relatorios gerados:\n- {json_path}\n- {md_path}"
+
+
+def _render_apply_filters_result(result: dict) -> str:
+    summary = result.get("summary", {})
+    failed = result.get("failed", [])
+    lines = [
+        "# Aplicacao de Filtros",
+        "",
+        f"- Filtros antigos excluidos: {summary.get('deleted_existing', 0)}",
+        f"- Filtros criados: {summary.get('created', 0)}",
+        f"- Falhas: {summary.get('failed', 0)}",
+        "",
+        "## Falhas",
+        "",
+    ]
+    if failed:
+        for item in failed:
+            lines.append(f"- `{item.get('label')}` {item.get('criteria')} -> {item.get('error')}")
+    else:
+        lines.append("- Nenhuma falha.")
+    return "\n".join(lines) + "\n"

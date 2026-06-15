@@ -9,6 +9,7 @@ from typing import Any
 from googleapiclient.errors import HttpError
 
 from .config import AppConfig
+from .migration import TARGET_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,7 @@ def fetch_messages(
                         userId="me",
                         id=mid,
                         format="metadata",
-                        metadataHeaders=["From", "Subject", "Date"],
+                        metadataHeaders=["From", "To", "Subject", "Date"],
                     ).execute()
                 )
             except HttpError as exc:
@@ -263,6 +264,7 @@ def normalize_message(message: dict[str, Any]) -> dict[str, Any]:
         "labelIds": message.get("labelIds", []),
         "snippet": message.get("snippet", ""),
         "from": headers.get("from", ""),
+        "to": headers.get("to", ""),
         "subject": headers.get("subject", ""),
         "date": headers.get("date", ""),
     }
@@ -318,9 +320,9 @@ def analyze_labels(labels: list[dict[str, Any]], label_usage: Counter) -> dict[s
             unused.append(enriched)
         else:
             active.append(enriched)
-        if label["name"].startswith("AGENTE/"):
+        if label["name"] in TARGET_LABELS:
             agent_labels.append(enriched)
-        if not label["name"].startswith("AGENTE/") and _is_legacy_label_name(label["name"]):
+        if label["name"] not in TARGET_LABELS and _is_legacy_label_name(label["name"]):
             legacy_candidates.append(enriched)
 
     grouped_prefixes = [
@@ -440,16 +442,16 @@ def build_proposed_structure(label_analysis: dict[str, Any], filter_analysis: di
 
     return {
         "root_labels": [
-            "AGENTE/URGENTE",
-            "AGENTE/TRABALHO/VAGAS",
-            "AGENTE/TRABALHO/CANDIDATURAS",
-            "AGENTE/TRABALHO/PROJETOS",
-            "AGENTE/TRABALHO/CLIENTES-PJ",
-            "AGENTE/FINANCEIRO",
-            "AGENTE/PESSOAL",
-            "AGENTE/PROMOCOES",
-            "AGENTE/NOTIFICACOES",
-            "AGENTE/REVISAR",
+            "01_PROFISSIONAL/TRABALHO",
+            "01_PROFISSIONAL/PROJETOS-PJ",
+            "01_PROFISSIONAL/VAGAS",
+            "01_PROFISSIONAL/CANDIDATURAS",
+            "02_FINANCEIRO/CONTAS",
+            "02_FINANCEIRO/EM_ATRASO",
+            "03_URGENTE",
+            "04_NOTIFICACOES",
+            "05_COMPRAS",
+            "06_NEWSLETTER",
         ],
         "rules": [
             "Reclassificar todos os emails mantendo labels de sistema do Gmail.",
@@ -482,7 +484,7 @@ def build_recommendations(
     if filter_analysis["duplicate_groups"]:
         recommendations.append("Foram detectados filtros com assinatura repetida; vale consolidar esses grupos antes da limpeza final.")
     if label_analysis["legacy_candidates"]:
-        recommendations.append("Ha labels antigas coexistindo com labels AGENTE; a reclassificacao completa deve remover essa sobreposicao antes da exclusao.")
+        recommendations.append("Ha labels antigas coexistindo com a nova taxonomia; a reclassificacao completa deve remover essa sobreposicao antes da exclusao.")
 
     recommendations.append("Rodar primeiro em modo analyze/dry-run e so depois habilitar reclassificacao em massa.")
     return recommendations
@@ -499,6 +501,8 @@ def _is_legacy_label_name(name: str) -> bool:
         "PT/",
         "FLUXO/",
         "IA/",
+        "AGENTE/",
+        "AGENTES/",
     )
     return name.startswith(prefixes)
 

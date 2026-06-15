@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .migration import TARGET_LABELS
+
 
 def build_label_cleanup_plan(report: dict[str, Any]) -> dict[str, Any]:
     labels = report.get("labels", [])
@@ -18,8 +20,8 @@ def build_label_cleanup_plan(report: dict[str, Any]) -> dict[str, Any]:
         name = label["name"]
         if label.get("type") == "system":
             continue
-        if name.startswith("AGENTE/"):
-            keep.append(_label_summary(label, "label do novo sistema"))
+        if name in TARGET_LABELS:
+            keep.append(_label_summary(label, "label da nova taxonomia"))
             continue
 
         summary = _label_summary(label, "label legada")
@@ -48,7 +50,7 @@ def build_label_cleanup_plan(report: dict[str, Any]) -> dict[str, Any]:
         ),
         "keep": sorted(keep, key=lambda item: item["name"]),
         "rules": [
-            "Nao remover labels AGENTE.",
+            "Nao remover labels da nova taxonomia.",
             "Nao remover labels de sistema do Gmail.",
             "Remover primeiro apenas labels legadas vazias.",
             "Labels legadas ainda com mensagens devem ser revisadas apos nova rodada de reclassificacao.",
@@ -100,5 +102,5 @@ def _label_summary(label: dict[str, Any], kind: str) -> dict[str, Any]:
 
 
 def _looks_legacy(name: str) -> bool:
-    prefixes = ("[Gmail]/", "PT/", "FLUXO/", "IA/", "0_", "1_", "2_", "3_", "4_")
+    prefixes = ("[Gmail]/", "PT/", "FLUXO/", "IA/", "AGENTE/", "AGENTES/", "0_", "1_", "2_", "3_", "4_")
     return name.startswith(prefixes)

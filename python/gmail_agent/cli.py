@@ -15,8 +15,10 @@ from .commands import (
     run_maintain_recent,
     run_reclassify,
     run_reclassify_label,
+    run_reclassify_query,
     run_reclassify_dry_run,
     run_generate_filters,
+    run_apply_filters,
 )
 
 
@@ -125,6 +127,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Quantidade maxima de mensagens dessa label a reclassificar nesta execucao.",
     )
 
+    reclassify_query = subparsers.add_parser("reclassify-query", help="Executa a reclassificacao real focada em uma busca Gmail.")
+    reclassify_query.add_argument(
+        "--query",
+        required=True,
+        help="Busca Gmail usada para selecionar mensagens.",
+    )
+    reclassify_query.add_argument(
+        "--limit",
+        type=int,
+        default=500,
+        help="Quantidade maxima de mensagens dessa busca a reclassificar nesta execucao.",
+    )
+
     cleanup_labels = subparsers.add_parser("cleanup-labels", help="Exclui apenas labels legadas vazias e seguras.")
     cleanup_labels.add_argument(
         "--limit",
@@ -136,6 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("cleanup-dry-run", help="Prepara a futura limpeza sem apagar labels/filtros.")
 
     subparsers.add_parser("generate-filters", help="Gera um arquivo XML de filtros para importacao nativa no Gmail.")
+    apply_filters = subparsers.add_parser("apply-filters", help="Aplica filtros gerados diretamente via API Gmail.")
+    apply_filters.add_argument(
+        "--replace-existing",
+        action="store_true",
+        default=False,
+        help="Remove filtros existentes antes de criar os novos.",
+    )
 
     maintain_recent = subparsers.add_parser("maintain-recent", help="Classifica emails recentes e aprende com labels AGENTE aplicadas manualmente.")
     maintain_recent.add_argument(
@@ -203,6 +225,10 @@ def main() -> int:
             print(run_reclassify_label(label_name=args.label, limit=args.limit), flush=True)
             return 0
 
+        if args.command == "reclassify-query":
+            print(run_reclassify_query(query=args.query, limit=args.limit), flush=True)
+            return 0
+
         if args.command == "cleanup-labels":
             print(run_cleanup_labels(limit=args.limit), flush=True)
             return 0
@@ -213,6 +239,10 @@ def main() -> int:
 
         if args.command == "generate-filters":
             print(run_generate_filters(), flush=True)
+            return 0
+
+        if args.command == "apply-filters":
+            print(run_apply_filters(replace_existing=args.replace_existing), flush=True)
             return 0
 
         if args.command == "maintain-recent":

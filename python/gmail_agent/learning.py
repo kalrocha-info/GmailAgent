@@ -6,11 +6,11 @@ from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
 
-from .migration import TARGET_LABELS
+from .migration import TARGET_LABELS, label_to_target
 
 logger = logging.getLogger(__name__)
 
-LEARNING_TARGETS = [label for label in TARGET_LABELS if label != "AGENTE/REVISAR"]
+LEARNING_TARGETS = TARGET_LABELS
 
 # Prioridade de labels para desempate: labels mais específicas têm prioridade
 # BUG-8 corrigido: em vez de usar sempre o primeiro label, usamos o de maior prioridade
@@ -72,7 +72,7 @@ def rebuild_learning_state(report: dict[str, Any], min_sender_hits: int = 1, min
     domain_rules = _collapse_counters(domain_counts, min_hits=min_domain_hits)
 
     logger.info(
-        "Aprendizado: %d mensagens consideradas, %d com label AGENTE, "
+        "Aprendizado: %d mensagens consideradas, %d com label de classificacao, "
         "%d regras de remetente, %d regras de domínio.",
         messages_considered, messages_with_manual_agent_label,
         len(sender_rules), len(domain_rules),
@@ -96,11 +96,15 @@ def extract_sender_email(sender_value: str) -> str:
 
 def _extract_learning_target(resolved_labels: list[str]) -> str | None:
     """
-    BUG-8 corrigido: em vez de retornar always o primeiro label AGENTE encontrado,
+    BUG-8 corrigido: em vez de retornar always o primeiro label de classificacao encontrado,
     retorna o label com MAIOR prioridade (menor índice em LEARNING_TARGETS),
     priorizando labels mais específicas como URGENTE sobre REVISAR.
     """
-    preferred = [label for label in resolved_labels if label in LEARNING_TARGETS]
+    preferred = [
+        normalized
+        for label in resolved_labels
+        if (normalized := label_to_target(label)) in LEARNING_TARGETS
+    ]
     if not preferred:
         return None
     # Ordenar por prioridade (menor índice = maior prioridade) e retornar o melhor
