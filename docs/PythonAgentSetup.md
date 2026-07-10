@@ -1,6 +1,6 @@
 # Python Agent Setup
 
-Esta versao Python foi criada para fazer a reorganizacao completa do Gmail com mais controle que o Apps Script.
+Esta e a implementacao oficial do GmailAgent. O antigo prototipo em Google Apps Script foi descontinuado para manter uma unica fonte de regras e automacao.
 
 ## Objetivo desta entrega
 

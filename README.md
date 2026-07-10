@@ -10,32 +10,22 @@ Agente inteligente para organizacao de emails no Gmail com foco em:
 
 ## Estrutura do repositorio
 
-- `src/`
-  Script principal para colar no Google Apps Script.
 - `docs/`
-  Documentacao funcional e material de apoio.
+  Documentacao operacional da versao Python.
 - `examples/`
   Arquivos de referencia, como exportacoes de filtros.
 - `python/`
-  Base Python para analise completa, relatorios, reclassificacao segura e autopilot.
+  Implementacao oficial do agente para analise, relatorios, reclassificacao segura e autopilot.
 
 ## Arquivos principais
 
-- [src/AgentAppScript.js](/D:/AGENTES-IA/src/AgentAppScript.js)
-- [docs/Documentacao_AgentAppScript.md](/D:/AGENTES-IA/docs/Documentacao_AgentAppScript.md)
 - [docs/PythonAgentSetup.md](/D:/AGENTES-IA/docs/PythonAgentSetup.md)
 - [examples/mailFilters.xml](/D:/AGENTES-IA/examples/mailFilters.xml)
 - [pyproject.toml](/D:/AGENTES-IA/pyproject.toml)
 
-## Como testar no Google Apps Script
+## Implementacao oficial
 
-1. Abra [script.google.com](https://script.google.com)
-2. Crie um novo projeto
-3. Apague o conteudo padrao de `Codigo.gs`
-4. Copie o conteudo de [src/AgentAppScript.js](/D:/AGENTES-IA/src/AgentAppScript.js) para o projeto
-5. Salve o projeto
-6. Execute `runFirstTimeSetup()` para a primeira configuracao
-7. Depois execute `analyzeInbox()` para revisar a classificacao e o aprendizado
+A versao Python e a unica implementacao ativa e mantida. O antigo prototipo em Google Apps Script foi descontinuado para evitar regras duplicadas e comportamentos divergentes.
 
 ## Fluxo recomendado de uso
 
@@ -59,14 +49,6 @@ A ordem de confianca e:
 2. Assunto
 3. Dominio
 4. Palavra-chave
-
-## Proximos passos sugeridos
-
-- testar o script no Apps Script
-- validar as primeiras regras aprendidas
-- revisar filtros antigos exportados em [examples/mailFilters.xml](/D:/AGENTES-IA/examples/mailFilters.xml)
-- decidir quando habilitar arquivamento automatico
-- executar a base Python em modo `analyze` para inventariar toda a conta antes da reclassificacao em massa
 
 ## Fluxo Python recomendado
 
