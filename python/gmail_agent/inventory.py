@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+import base64
+import re
 import time
 from collections import Counter
 from collections import defaultdict
+from html import unescape
 from typing import Any
 
 from googleapiclient.errors import HttpError
@@ -179,8 +182,7 @@ def fetch_messages(
                     lambda mid=message["id"]: gmail_service.users().messages().get(
                         userId="me",
                         id=mid,
-                        format="metadata",
-                        metadataHeaders=["From", "To", "Subject", "Date"],
+                        format="full",
                     ).execute()
                 )
             except HttpError as exc:
@@ -258,16 +260,54 @@ def normalize_message(message: dict[str, Any]) -> dict[str, Any]:
         header.get("name", "").lower(): header.get("value", "")
         for header in message.get("payload", {}).get("headers", [])
     }
+    body_text = extract_message_body_text(message.get("payload", {}))
     return {
         "id": message.get("id"),
         "threadId": message.get("threadId"),
         "labelIds": message.get("labelIds", []),
         "snippet": message.get("snippet", ""),
+        "body_text": body_text,
         "from": headers.get("from", ""),
         "to": headers.get("to", ""),
         "subject": headers.get("subject", ""),
         "date": headers.get("date", ""),
     }
+
+
+def extract_message_body_text(payload: dict[str, Any], max_chars: int = 12000) -> str:
+    chunks: list[str] = []
+
+    def walk(part: dict[str, Any]) -> None:
+        mime_type = (part.get("mimeType") or "").lower()
+        body = part.get("body") or {}
+        data = body.get("data")
+        if data and mime_type in {"text/plain", "text/html"}:
+            decoded = _decode_body_data(data)
+            if decoded:
+                chunks.append(_html_to_text(decoded) if mime_type == "text/html" else decoded)
+        for child in part.get("parts", []) or []:
+            walk(child)
+
+    walk(payload or {})
+    text = " ".join(chunks)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:max_chars]
+
+
+def _decode_body_data(data: str) -> str:
+    try:
+        padding = "=" * (-len(data) % 4)
+        return base64.urlsafe_b64decode((data + padding).encode("ascii")).decode("utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        logger.debug("Falha ao decodificar corpo de email.", exc_info=True)
+        return ""
+
+
+def _html_to_text(value: str) -> str:
+    without_scripts = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", value)
+    with_spaces = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</li>|</tr>", " ", without_scripts)
+    without_tags = re.sub(r"<[^>]+>", " ", with_spaces)
+    return unescape(without_tags)
 
 
 def count_label_usage(messages: list[dict[str, Any]]) -> Counter:
@@ -442,10 +482,10 @@ def build_proposed_structure(label_analysis: dict[str, Any], filter_analysis: di
 
     return {
         "root_labels": [
-            "01_PROFISSIONAL/TRABALHO",
-            "01_PROFISSIONAL/PROJETOS-PJ",
-            "01_PROFISSIONAL/VAGAS",
-            "01_PROFISSIONAL/CANDIDATURAS",
+            "01_PROFI/TRABALHO",
+            "01_PROFI/PROJETOS-PJ",
+            "01_PROFI/VAGAS",
+            "01_PROFI/CANDIDATURAS",
             "02_FINANCEIRO/CONTAS",
             "02_FINANCEIRO/EM_ATRASO",
             "03_URGENTE",

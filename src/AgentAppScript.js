@@ -37,21 +37,23 @@ const CONFIG = {
 
 const LABELS = {
   ROOT: "AGENTE",
-  URGENTE: "AGENTE/URGENTE",
-  TRABALHO: "AGENTE/TRABALHO",
+  URGENTE: "03_URGENTE",
+  TRABALHO: "01_PROFI/TRABALHO",
+  VAGAS: "01_PROFI/VAGAS",
   PESSOAL: "AGENTE/PESSOAL",
   PROMOCOES: "AGENTE/PROMOCOES",
+  PUBLICIDADE_PROMOCOES: "07_PUBLICIDADE-PROMOCOES",
   NOTIFICACOES: "AGENTE/NOTIFICACOES",
   REVISAO: "AGENTE/REVISAR",
   APRENDIDO: "AGENTE/APRENDIDO",
   CONTATOS: "AGENTE/CONTATOS",
-  FINANCEIRO: "AGENTE/FINANCEIRO"  // BUG-JS-5: categoria em falta no mapa original
+  FINANCEIRO: "02_FINANCEIRO/CONTAS"  // BUG-JS-5: categoria em falta no mapa original
 };
 
 const STATIC_RULES = [
   { category: "URGENTE", query: "from:(mail.notion.so OR silvia.calado@medialcare.pt) OR subject:(urgente OR urgent)" },
-  { category: "PROMOCOES", query: "from:(news@mkt.americanas.com OR info@ourbusinessnetwork.com OR newsletter@deals.banggood.com)" },
-  { category: "PROMOCOES", query: "from:(alert@indeed.com) OR list:(<75088.1.jradmin.jobrapidoalert.com>)" },
+  { category: "PUBLICIDADE_PROMOCOES", query: "from:(news@mkt.americanas.com OR info@ourbusinessnetwork.com OR newsletter@deals.banggood.com)" },
+  { category: "VAGAS", query: "from:(alert@indeed.com) OR list:(<75088.1.jradmin.jobrapidoalert.com>)" },
   { category: "NOTIFICACOES", query: "from:(noreply@redditmail.com OR linkedin.com OR lc@opendns.com)" },
   { category: "TRABALHO", query: "from:(alerts@englishclass101.com OR quincy@freecodecamp.org OR lira@hashtagtreinamentos.com OR contato@devsuperior.com OR mail@doutoresdoexcel.eadplataforma.com OR doutores@doutoresdoexcel.com.br OR alert@notify.coursary.com)" },
   { category: "PESSOAL", query: "from:(amazon.es OR amazon.com OR amazon.com.br OR cartaounibanco@unicre.pt OR extratos@unicre.pt OR nao-responder@enotas.com.br OR mercadopago.com OR picpay.com OR vivo.com.br OR claro.com.br OR tim.com.br OR oi.com.br OR ComunicacoesCartao@clientesfnacpt.caixabankpc.com OR noreply@cartaocontinente.pt OR mun.montijo.pt@cgi.com)" }
@@ -367,10 +369,16 @@ function inferCategory(sender, subject, snippet) {
   if (hasAnyKeyword(haystack, PRIORITY_RULES.high)) {
     return "URGENTE";
   }
+  if (/(vaga|vagas|contratando|candidate-se|candidatura|indeed|infojobs|jobrapido|career|jobs?)/i.test(haystack)) {
+    return "VAGAS";
+  }
   if (/(invoice|fatura|boleto|pagamento|support|cliente|projeto|meeting|reuniao|contrato)/i.test(haystack)) {
     return "TRABALHO";
   }
-  if (/(promo|newsletter|sale|deal|cupom|oferta|desconto)/i.test(haystack)) {
+  if (/(promo|promocao|promoção|sale|deal|cupom|oferta|desconto|cashback|vantagem|vantagens|aproveite|pre-aprovado|pré-aprovado|limite disponivel|limite disponível|curso|cursos|hotmart|udemy)/i.test(haystack)) {
+    return "PUBLICIDADE_PROMOCOES";
+  }
+  if (/(newsletter)/i.test(haystack)) {
     return "PROMOCOES";
   }
   if (/(notification|notificacao|alerta|reddit|linkedin|system|sistema)/i.test(haystack)) {
@@ -384,7 +392,7 @@ function inferPriority(category, subject, snippet) {
   if (category === "URGENTE" || hasAnyKeyword(haystack, PRIORITY_RULES.high)) {
     return "alta";
   }
-  if (category === "TRABALHO" || hasAnyKeyword(haystack, PRIORITY_RULES.medium)) {
+  if (category === "TRABALHO" || category === "VAGAS" || hasAnyKeyword(haystack, PRIORITY_RULES.medium)) {
     return "media";
   }
   return "baixa";
@@ -401,7 +409,7 @@ function suggestAction(category, priority) {
   if (category === "URGENTE" || priority === "alta") {
     return "manter na caixa, aplicar label e revisar";
   }
-  if (category === "PROMOCOES" || category === "NOTIFICACOES") {
+  if (category === "PROMOCOES" || category === "PUBLICIDADE_PROMOCOES" || category === "NOTIFICACOES") {
     return "aplicar label e sugerir arquivamento";
   }
   return "aplicar label e organizar";
@@ -411,7 +419,7 @@ function suggestReply(category, priority, subject) {
   if (category === "URGENTE" || priority === "alta") {
     return `Recebi sua mensagem sobre "${subject}". Vou analisar e retornar o quanto antes.`;
   }
-  if (category === "TRABALHO") {
+  if (category === "TRABALHO" || category === "VAGAS") {
     return `Recebi seu email. Vou revisar os detalhes e responder com os proximos passos.`;
   }
   return "";

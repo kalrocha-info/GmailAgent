@@ -102,5 +102,18 @@ def _label_summary(label: dict[str, Any], kind: str) -> dict[str, Any]:
 
 
 def _looks_legacy(name: str) -> bool:
-    prefixes = ("[Gmail]/", "PT/", "FLUXO/", "IA/", "AGENTE/", "AGENTES/", "0_", "1_", "2_", "3_", "4_")
+    prefixes = (
+        "01_PROFISSIONAL/",
+        "[Gmail]/",
+        "PT/",
+        "FLUXO/",
+        "IA/",
+        "AGENTE/",
+        "AGENTES/",
+        "0_",
+        "1_",
+        "2_",
+        "3_",
+        "4_",
+    )
     return name.startswith(prefixes)

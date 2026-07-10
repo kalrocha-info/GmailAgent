@@ -174,6 +174,136 @@ def run_reclassify_label(label_name: str, limit: int) -> str:
     return f"Relatorios gerados:\n- {json_path}\n- {md_path}"
 
 
+def run_migrate_profi_labels(limit_per_label: int) -> str:
+    config = load_config()
+    ensure_reports_dir(config.reports_dir)
+    gmail_service = build_gmail_service(config)
+
+    label_pairs = [
+        ("01_PROFISSIONAL/TRABALHO", "01_PROFI/TRABALHO"),
+        ("01_PROFISSIONAL/PROJETOS-PJ", "01_PROFI/PROJETOS-PJ"),
+        ("01_PROFISSIONAL/VAGAS", "01_PROFI/VAGAS"),
+        ("01_PROFISSIONAL/CANDIDATURAS", "01_PROFI/CANDIDATURAS"),
+    ]
+    labels = gmail_service.users().labels().list(userId="me").execute().get("labels", [])
+    label_ids = {label["name"]: label["id"] for label in labels}
+    runs = []
+
+    for source_label, target_label in label_pairs:
+        source_id = label_ids.get(source_label)
+        target_id = label_ids.get(target_label)
+
+        if not source_id:
+            runs.append(_profi_label_run(source_label, target_label, "source_missing"))
+            continue
+        if not target_id:
+            created = gmail_service.users().labels().create(
+                userId="me",
+                body={
+                    "name": target_label,
+                    "labelListVisibility": "labelShow",
+                    "messageListVisibility": "show",
+                },
+            ).execute()
+            target_id = created["id"]
+            label_ids[target_label] = target_id
+
+        changed = []
+        skipped = []
+        page_token = None
+        examined = 0
+
+        while examined < limit_per_label:
+            response = gmail_service.users().messages().list(
+                userId="me",
+                labelIds=[source_id],
+                maxResults=min(100, limit_per_label - examined),
+                pageToken=page_token,
+            ).execute()
+            messages = response.get("messages", [])
+            if not messages:
+                break
+
+            for message in messages:
+                examined += 1
+                try:
+                    gmail_service.users().messages().modify(
+                        userId="me",
+                        id=message["id"],
+                        body={
+                            "addLabelIds": [target_id],
+                            "removeLabelIds": [source_id],
+                        },
+                    ).execute()
+                    changed.append({"message_id": message["id"]})
+                except Exception as exc:  # noqa: BLE001
+                    skipped.append({"message_id": message.get("id"), "reason": str(exc)})
+
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+
+        deleted_source_label = False
+        delete_error = ""
+        try:
+            source_details = gmail_service.users().labels().get(userId="me", id=source_id).execute()
+            if source_details.get("messagesTotal", 0) == 0 and source_details.get("threadsTotal", 0) == 0:
+                gmail_service.users().labels().delete(userId="me", id=source_id).execute()
+                deleted_source_label = True
+        except Exception as exc:  # noqa: BLE001
+            delete_error = str(exc)
+
+        runs.append(
+            {
+                "source_label": source_label,
+                "target_label": target_label,
+                "deleted_source_label": deleted_source_label,
+                "delete_error": delete_error,
+                "summary": {
+                    "messages_requested": limit_per_label,
+                    "messages_examined": examined,
+                    "messages_changed": len(changed),
+                    "messages_skipped": len(skipped),
+                },
+                "changed": changed[:30],
+                "skipped": skipped[:30],
+            }
+        )
+
+    summary = {
+        "labels_processed": len(runs),
+        "messages_requested_per_label": limit_per_label,
+        "messages_examined": sum(item.get("summary", {}).get("messages_examined", 0) for item in runs),
+        "messages_changed": sum(item.get("summary", {}).get("messages_changed", 0) for item in runs),
+        "messages_skipped": sum(item.get("summary", {}).get("messages_skipped", 0) for item in runs),
+    }
+    payload = {"summary": summary, "runs": runs}
+
+    stamp = utc_stamp()
+    json_path = config.reports_dir / f"migrate-profi-labels-{stamp}.json"
+    md_path = config.reports_dir / f"migrate-profi-labels-{stamp}.md"
+    write_json(json_path, payload)
+    write_markdown(md_path, _render_migrate_profi_labels_result(payload))
+    return f"Relatorios gerados:\n- {json_path}\n- {md_path}"
+
+
+def _profi_label_run(source_label: str, target_label: str, reason: str) -> dict:
+    return {
+        "source_label": source_label,
+        "target_label": target_label,
+        "deleted_source_label": False,
+        "delete_error": "",
+        "summary": {
+            "messages_requested": 0,
+            "messages_examined": 0,
+            "messages_changed": 0,
+            "messages_skipped": 1,
+        },
+        "changed": [],
+        "skipped": [{"reason": reason}],
+    }
+
+
 def run_reclassify_query(query: str, limit: int) -> str:
     config = load_config()
     ensure_reports_dir(config.reports_dir)
@@ -661,6 +791,39 @@ def _render_reclassify_label_result(result: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_migrate_profi_labels_result(payload: dict) -> str:
+    summary = payload.get("summary", {})
+    runs = payload.get("runs", [])
+
+    lines = [
+        "# Migracao 01_PROFISSIONAL para 01_PROFI",
+        "",
+        f"- Labels processadas: {summary.get('labels_processed', 0)}",
+        f"- Limite por label: {summary.get('messages_requested_per_label', 0)}",
+        f"- Mensagens examinadas: {summary.get('messages_examined', 0)}",
+        f"- Mensagens alteradas: {summary.get('messages_changed', 0)}",
+        f"- Mensagens ignoradas: {summary.get('messages_skipped', 0)}",
+        "",
+        "## Resultado por label",
+        "",
+    ]
+
+    for run in runs:
+        run_summary = run.get("summary", {})
+        deleted = "excluida" if run.get("deleted_source_label") else "mantida"
+        delete_error = f"; erro ao excluir: {run.get('delete_error')}" if run.get("delete_error") else ""
+        lines.append(
+            f"- `{run.get('source_label', '')}`: "
+            f"{run_summary.get('messages_changed', 0)} alteradas, "
+            f"{run_summary.get('messages_skipped', 0)} ignoradas; label antiga {deleted}{delete_error}"
+        )
+
+    lines.extend(["", "## Proximo passo", ""])
+    lines.append("Rodar `gmail-agent cleanup-labels --limit 20` depois que as labels antigas estiverem vazias.")
+
+    return "\n".join(lines) + "\n"
+
+
 def _render_maintain_recent_result(payload: dict, recent_days: int, learning_days: int) -> str:
     summary = payload.get("summary", {})
     stale_summary = payload.get("stale_cleanup_summary", {})
@@ -760,6 +923,7 @@ def _render_apply_filters_result(result: dict) -> str:
         f"- Filtros antigos excluidos: {summary.get('deleted_existing', 0)}",
         f"- Filtros criados: {summary.get('created', 0)}",
         f"- Falhas: {summary.get('failed', 0)}",
+        f"- Filtros novos revertidos apos falha: {summary.get('rolled_back', 0)}",
         "",
         "## Falhas",
         "",

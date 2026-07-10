@@ -11,26 +11,33 @@ from googleapiclient.errors import HttpError
 
 
 TARGET_LABELS = [
-    "01_PROFISSIONAL/TRABALHO",
-    "01_PROFISSIONAL/PROJETOS-PJ",
-    "01_PROFISSIONAL/VAGAS",
-    "01_PROFISSIONAL/CANDIDATURAS",
+    "01_PROFI/TRABALHO",
+    "01_PROFI/PROJETOS-PJ",
+    "01_PROFI/VAGAS",
+    "01_PROFI/CANDIDATURAS",
     "02_FINANCEIRO/CONTAS",
     "02_FINANCEIRO/EM_ATRASO",
     "03_URGENTE",
     "04_NOTIFICACOES",
     "05_COMPRAS",
     "06_NEWSLETTER",
+    "07_PUBLICIDADE-PROMOCOES",
 ]
 
 ARCHIVE_TARGET_LABELS = {
-    "01_PROFISSIONAL/VAGAS",
+    "01_PROFI/VAGAS",
+    "02_FINANCEIRO/EM_ATRASO",
     "04_NOTIFICACOES",
     "05_COMPRAS",
     "06_NEWSLETTER",
+    "07_PUBLICIDADE-PROMOCOES",
 }
 
 EXPLICIT_LABEL_MAPPING = {
+    "01_PROFISSIONAL/TRABALHO": "01_PROFI/TRABALHO",
+    "01_PROFISSIONAL/PROJETOS-PJ": "01_PROFI/PROJETOS-PJ",
+    "01_PROFISSIONAL/VAGAS": "01_PROFI/VAGAS",
+    "01_PROFISSIONAL/CANDIDATURAS": "01_PROFI/CANDIDATURAS",
     "0_URGENTE": "03_URGENTE",
     "[Gmail]/SEGURANÇA": "03_URGENTE",
     "[Gmail]/00_INCUMPRIMENTO-PT": "03_URGENTE",
@@ -41,33 +48,33 @@ EXPLICIT_LABEL_MAPPING = {
     "[Gmail]/01_COMPRAS": "05_COMPRAS",
     "[Gmail]/00_GESTAO": "02_FINANCEIRO/CONTAS",
     "[Gmail]/02_SAUDE": "02_FINANCEIRO/CONTAS",
-    "2_ESTUDOS": "01_PROFISSIONAL/CANDIDATURAS",
-    "PT/2_ESTUDOS": "01_PROFISSIONAL/CANDIDATURAS",
-    "[Gmail]/01_ESTUDOS": "01_PROFISSIONAL/CANDIDATURAS",
-    "[Gmail]/00_TRABALHO": "01_PROFISSIONAL/TRABALHO",
-    "[Gmail]/02_TRABALHO E CARREIRA": "01_PROFISSIONAL/VAGAS",
-    "[Gmail]/Candidaturas": "01_PROFISSIONAL/CANDIDATURAS",
-    "[Gmail]/ENTREVISTAS": "01_PROFISSIONAL/CANDIDATURAS",
-    "[Gmail]/PROFISSIONAL": "01_PROFISSIONAL/PROJETOS-PJ",
-    "3_VAGAS_PROMOCOES": "01_PROFISSIONAL/VAGAS",
+    "2_ESTUDOS": "01_PROFI/CANDIDATURAS",
+    "PT/2_ESTUDOS": "01_PROFI/CANDIDATURAS",
+    "[Gmail]/01_ESTUDOS": "01_PROFI/CANDIDATURAS",
+    "[Gmail]/00_TRABALHO": "01_PROFI/TRABALHO",
+    "[Gmail]/02_TRABALHO E CARREIRA": "01_PROFI/VAGAS",
+    "[Gmail]/Candidaturas": "01_PROFI/CANDIDATURAS",
+    "[Gmail]/ENTREVISTAS": "01_PROFI/CANDIDATURAS",
+    "[Gmail]/PROFISSIONAL": "01_PROFI/PROJETOS-PJ",
+    "3_VAGAS_PROMOCOES": "01_PROFI/VAGAS",
     "[Gmail]/06_NEWSLETTERS": "06_NEWSLETTER",
-    "[Gmail]/PROMOÇÕES": "06_NEWSLETTER",
+    "[Gmail]/PROMOÇÕES": "07_PUBLICIDADE-PROMOCOES",
     "4_REDES_SOCIAIS": "04_NOTIFICACOES",
-    "FLUXO/LinkedIn": "01_PROFISSIONAL/VAGAS",
+    "FLUXO/LinkedIn": "01_PROFI/VAGAS",
     "IA/Outros": "04_NOTIFICACOES",
     "AGENTE/URGENTE": "03_URGENTE",
-    "AGENTE/TRABALHO": "01_PROFISSIONAL/TRABALHO",
-    "AGENTE/TRABALHO/VAGAS": "01_PROFISSIONAL/VAGAS",
-    "AGENTE/TRABALHO/CANDIDATURAS": "01_PROFISSIONAL/CANDIDATURAS",
-    "AGENTE/TRABALHO/PROJETOS": "01_PROFISSIONAL/PROJETOS-PJ",
-    "AGENTE/TRABALHO/CLIENTES-PJ": "01_PROFISSIONAL/PROJETOS-PJ",
+    "AGENTE/TRABALHO": "01_PROFI/TRABALHO",
+    "AGENTE/TRABALHO/VAGAS": "01_PROFI/VAGAS",
+    "AGENTE/TRABALHO/CANDIDATURAS": "01_PROFI/CANDIDATURAS",
+    "AGENTE/TRABALHO/PROJETOS": "01_PROFI/PROJETOS-PJ",
+    "AGENTE/TRABALHO/CLIENTES-PJ": "01_PROFI/PROJETOS-PJ",
     "AGENTE/FINANCEIRO": "02_FINANCEIRO/CONTAS",
     "AGENTE/FINANCEIRO/CONTAS": "02_FINANCEIRO/CONTAS",
     "AGENTE/FINANCEIRO/EM_ATRASO": "02_FINANCEIRO/EM_ATRASO",
     "AGENTE/CONTAS": "02_FINANCEIRO/CONTAS",
     "AGENTE/COMPRAS": "05_COMPRAS",
     "AGENTE/PESSOAL": "04_NOTIFICACOES",
-    "AGENTE/PROMOCOES": "06_NEWSLETTER",
+    "AGENTE/PROMOCOES": "07_PUBLICIDADE-PROMOCOES",
     "AGENTE/NOTIFICACOES": "04_NOTIFICACOES",
     "AGENTE/REVISAR": "04_NOTIFICACOES",
     "AGENTES/NEWSLETTER": "06_NEWSLETTER",
@@ -75,19 +82,19 @@ EXPLICIT_LABEL_MAPPING = {
 
 EXPLICIT_SENDER_MAPPING = {
     "groups-noreply@linkedin.com": "04_NOTIFICACOES",
-    "jobs-noreply@linkedin.com": "01_PROFISSIONAL/VAGAS",
-    "jobalerts-noreply@linkedin.com": "01_PROFISSIONAL/VAGAS",
-    "newsletters-noreply@linkedin.com": "04_NOTIFICACOES",
-    "indeed.com": "01_PROFISSIONAL/VAGAS",
-    "infojobs.com.br": "01_PROFISSIONAL/VAGAS",
-    "jobrapidoalert.com": "01_PROFISSIONAL/VAGAS",
-    "greenhouse.io": "01_PROFISSIONAL/CANDIDATURAS",
-    "glassdoor.com": "01_PROFISSIONAL/VAGAS",
-    "wellhub.com": "01_PROFISSIONAL/CANDIDATURAS",
-    "upwork.com": "01_PROFISSIONAL/PROJETOS-PJ",
-    "99freelas.com.br": "01_PROFISSIONAL/PROJETOS-PJ",
-    "alignerr.com": "01_PROFISSIONAL/PROJETOS-PJ",
-    "sme": "01_PROFISSIONAL/CANDIDATURAS",
+    "jobs-noreply@linkedin.com": "01_PROFI/VAGAS",
+    "jobalerts-noreply@linkedin.com": "01_PROFI/VAGAS",
+    # "newsletters-noreply@linkedin.com" é tratado por linkedin_newsletter_target()
+    "indeed.com": "01_PROFI/VAGAS",
+    "infojobs.com.br": "01_PROFI/VAGAS",
+    "jobrapidoalert.com": "01_PROFI/VAGAS",
+    "greenhouse.io": "01_PROFI/CANDIDATURAS",
+    "glassdoor.com": "01_PROFI/VAGAS",
+    "wellhub.com": "01_PROFI/CANDIDATURAS",
+    "upwork.com": "01_PROFI/PROJETOS-PJ",
+    "99freelas.com.br": "01_PROFI/PROJETOS-PJ",
+    "alignerr.com": "01_PROFI/PROJETOS-PJ",
+    "sme": "01_PROFI/CANDIDATURAS",
     "vivo.com.br": "02_FINANCEIRO/CONTAS",
     "nubank.com.br": "02_FINANCEIRO/CONTAS",
     "caixa.gov.br": "02_FINANCEIRO/CONTAS",
@@ -130,8 +137,11 @@ URGENT_TERMS = [
 WORK_TERMS = [
     "vaga", "vagas", "job", "jobs", "candidatura", "candidaturas", "application",
     "contratando", "career", "carreira", "entrevista", "interview", "greenhouse",
-    "wellhub", "linkedin", "indeed", "infojobs", "jobrapido", "talent",
+    "wellhub", "indeed", "infojobs", "jobrapido", "talent",
     "freelance", "projeto", "proposal", "proposal update",
+    "opportunity", "opportunities", "hiring", "opening", "openings",
+    "recruitment", "recruiting", "position", "positions", "role", "roles",
+    "work from home", "remote", "join our team",
 ]
 
 PROMO_TERMS = [
@@ -143,6 +153,20 @@ PROMO_TERMS = [
     "datascience", "excel", "doctor", "doctors", "curso", "formação", "formacao",
     "ganhe", "convide", "convidando seus amigos", "cartão", "cartao", "cashback",
     "pré-aprovado", "pre-aprovado", "limite disponível", "limite disponivel",
+]
+
+COMMERCIAL_PROMO_TERMS = [
+    "promo", "promoção", "promocao", "promoções", "promocoes", "oferta", "ofertas",
+    "cupom", "desconto", "sale", "deals", "black friday", "marketing", "cashback",
+    "aproveite", "aproveitar", "imperdível", "imperdivel", "exclusivo", "exclusiva",
+    "vantagem", "vantagens", "benefício", "beneficio", "benefícios", "beneficios",
+    "pré-aprovado", "pre-aprovado", "limite disponível", "limite disponivel",
+    "limite especial", "cartão sem anuidade", "cartao sem anuidade", "melhores condições",
+    "melhores condicoes", "condições especiais", "condicoes especiais", "parcelamento especial",
+    "ganhe", "economize", "preço especial", "preco especial", "últimas vagas", "ultimas vagas",
+    "inscrições abertas", "inscricoes abertas", "acesso vitalício", "acesso vitalicio",
+    "bônus", "bonus", "hotmart", "udemy", "curso", "cursos", "formação", "formacao",
+    "imersão", "imersao", "matricule-se", "compre agora", "assine agora",
 ]
 
 NOTIFICATION_TERMS = [
@@ -310,7 +334,9 @@ def execute_reclassification_plan(
         conflicting_agent_labels = [
             label_name
             for label_name in existing_label_names
-            if is_classification_label(label_name) and label_name != target_label
+            if is_classification_label(label_name)
+            and label_name != target_label
+            and label_name not in plan["remove_labels"]
         ]
         for label_name in conflicting_agent_labels:
             label_id = reverse_label_lookup.get(label_name)
@@ -412,11 +438,12 @@ def archive_stale_inbox_messages(
             continue
 
         kept_agent_labels = [label for label in resolved_labels if is_classification_label(label)]
-        if not kept_agent_labels:
+        archive_labels = [label for label in kept_agent_labels if label in ARCHIVE_TARGET_LABELS]
+        if not archive_labels:
             skipped.append({
                 "message_id": message.get("id"),
                 "subject": message.get("subject"),
-                "reason": "sem label de classificacao para arquivamento tardio",
+                "reason": "categoria deve permanecer na caixa de entrada",
             })
             continue
 
@@ -463,10 +490,13 @@ def plan_message_reclassification(
     filter_rules: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     resolved_labels = [label_lookup.get(label_id, label_id) for label_id in message.get("labelIds", [])]
-    legacy_labels = [name for name in resolved_labels if is_legacy_label(name)]
     target = infer_target_from_message(message, resolved_labels, filter_rules=filter_rules)
 
-    remove_labels = [label for label in legacy_labels if label != target]
+    remove_labels = [
+        label
+        for label in resolved_labels
+        if label != target and (is_legacy_label(label) or is_classification_label(label))
+    ]
 
     return {
         "message_id": message.get("id"),
@@ -483,29 +513,31 @@ def infer_target_from_message(
     message: dict[str, Any],
     resolved_labels: list[str],
     filter_rules: list[dict[str, Any]] | None = None,
-) -> str:
+) -> str | None:
     subject = (message.get("subject") or "").lower()
     sender = (message.get("from") or "").lower()
     labels_text = " ".join(resolved_labels).lower()
-    content_text = f"{subject} {(message.get('snippet') or '').lower()} {labels_text}"
+    body_text = (message.get("body_text") or "").lower()
+    snippet_text = (message.get("snippet") or "").lower()
+    content_without_labels = f"{subject} {snippet_text} {body_text} {sender}"
+    content_text = f"{content_without_labels} {labels_text}"
     text = f"{subject} {sender} {labels_text}"
 
-    if is_security_urgent(text):
+    if is_security_urgent(content_without_labels):
         return "03_URGENTE"
-
-    if is_debt_or_credit_restriction(text):
-        return "02_FINANCEIRO/EM_ATRASO"
 
     explicit_target = first_explicit_label_target(resolved_labels)
     if explicit_target:
         return explicit_target
 
-    if contains_any(text, URGENT_TERMS):
-        return "03_URGENTE"
+    # Sinais críticos do conteúdo prevalecem sobre regras aprendidas. Isso evita
+    # que uma correção antiga de remetente esconda uma cobrança ou restrição real.
+    if is_debt_or_credit_restriction(content_without_labels):
+        return "02_FINANCEIRO/EM_ATRASO"
 
-    agent_target = first_agent_label_target(resolved_labels, allow_review=False)
-    if agent_target:
-        return agent_target
+    sender_target = sender_based_target(sender, subject)
+    if sender_target:
+        return sender_target
 
     linkedin_target = linkedin_newsletter_target(sender, content_text)
     if linkedin_target:
@@ -515,29 +547,32 @@ def infer_target_from_message(
     if filter_target:
         return filter_target
 
-    sender_target = sender_based_target(sender, subject)
-    if sender_target:
-        return sender_target
+    if contains_any(content_without_labels, URGENT_TERMS):
+        return "03_URGENTE"
 
-    if is_job_blast(text):
-        return "01_PROFISSIONAL/VAGAS"
+    if is_job_blast(content_without_labels):
+        return "01_PROFI/VAGAS"
 
-    if is_course_promotion(text):
-        return "06_NEWSLETTER"
-
-    if is_technical_newsletter(text):
-        return "06_NEWSLETTER"
-
-    work_target = infer_work_target(text)
+    work_target = infer_work_target(content_without_labels)
     if work_target:
         return work_target
-    if contains_any(text, FINANCIAL_TERMS):
-        return "02_FINANCEIRO/CONTAS"
-    if contains_any(text, PROMO_TERMS):
+
+    if is_commercial_promotion(content_without_labels):
+        return "07_PUBLICIDADE-PROMOCOES"
+
+    if is_course_promotion(content_without_labels):
+        return "07_PUBLICIDADE-PROMOCOES"
+
+    if is_technical_newsletter(content_without_labels):
         return "06_NEWSLETTER"
-    if contains_any(text, NOTIFICATION_TERMS):
+
+    if contains_any(content_without_labels, FINANCIAL_TERMS):
+        return "02_FINANCEIRO/CONTAS"
+    if contains_any(content_without_labels, PROMO_TERMS):
+        return "07_PUBLICIDADE-PROMOCOES"
+    if contains_any(content_without_labels, NOTIFICATION_TERMS):
         return "04_NOTIFICACOES"
-    if contains_any(text, PERSONAL_TERMS):
+    if contains_any(content_without_labels, PERSONAL_TERMS):
         return "04_NOTIFICACOES"
 
     agent_target = first_agent_label_target(resolved_labels, allow_review=True)
@@ -547,7 +582,9 @@ def infer_target_from_message(
     if any(is_legacy_label(label) for label in resolved_labels):
         return suggest_target_label(next(label for label in resolved_labels if is_legacy_label(label)))
 
-    return "04_NOTIFICACOES"
+    # Sem evidência suficiente, não alteramos a mensagem. O chamador registra a
+    # decisão como "sem label alvo" para revisão, evitando falso aprendizado.
+    return None
 
 
 def suggest_target_label(label_name: str) -> str:
@@ -562,10 +599,12 @@ def suggest_target_label(label_name: str) -> str:
     work_target = infer_work_target(name)
     if work_target:
         return work_target
+    if is_commercial_promotion(name):
+        return "07_PUBLICIDADE-PROMOCOES"
     if contains_any(name, FINANCIAL_TERMS):
         return "02_FINANCEIRO/CONTAS"
     if contains_any(name, PROMO_TERMS):
-        return "06_NEWSLETTER"
+        return "07_PUBLICIDADE-PROMOCOES"
     if contains_any(name, NOTIFICATION_TERMS):
         return "04_NOTIFICACOES"
     return "04_NOTIFICACOES"
@@ -743,6 +782,8 @@ def _query_token_matches(normalized_text: str, token: str) -> bool:
 def is_legacy_label(name: str) -> bool:
     if name in TARGET_LABELS:
         return False
+    if name.startswith("01_PROFISSIONAL/"):
+        return True
     prefixes = ("[Gmail]/", "PT/", "FLUXO/", "IA/", "AGENTE/", "AGENTES/")
     numeric_roots = ("0_", "1_", "2_", "3_", "4_")
     return name.startswith(prefixes) or name.startswith(numeric_roots)
@@ -753,7 +794,7 @@ def is_classification_label(name: str) -> bool:
 
 
 def contains_any(text: str, terms: list[str]) -> bool:
-    return any(term in text for term in terms)
+    return any(re.search(rf'\b{re.escape(term)}\b', text) for term in terms)
 
 
 def ensure_agent_labels(gmail_service, reverse_label_lookup: dict[str, str]) -> None:
@@ -793,12 +834,12 @@ def sender_based_target(sender: str, subject: str) -> str | None:
 
     for needle, target in EXPLICIT_SENDER_MAPPING.items():
         if needle in sender_lower:
-            if target.startswith("01_PROFISSIONAL") and contains_any(subject_lower, ["code", "security", "login", "verification", "otp", "sign-in"]):
+            if target.startswith("01_PROFI") and contains_any(subject_lower, ["code", "security", "login", "verification", "otp", "sign-in"]):
                 return "03_URGENTE"
             return target
 
     if "jobs" in subject_lower and "access" in subject_lower:
-        return "01_PROFISSIONAL/VAGAS"
+        return "01_PROFI/VAGAS"
 
     return None
 
@@ -808,16 +849,21 @@ def linkedin_newsletter_target(sender: str, text: str) -> str | None:
     sender_lower = (sender or "").lower()
     if sender_email != "newsletters-noreply@linkedin.com" and "newsletters-noreply@linkedin.com" not in sender_lower:
         return None
-    if is_job_blast(text) or infer_work_target(text) == "01_PROFISSIONAL/VAGAS":
-        return "01_PROFISSIONAL/VAGAS"
+    if is_job_blast(text) or infer_work_target(text) == "01_PROFI/VAGAS":
+        return "01_PROFI/VAGAS"
     return "06_NEWSLETTER"
 
 
 FINANCIAL_TERMS = [
-    "financeiro", "fatura", "pix", "boleto", "compra", "compras", "mercadopago",
-    "picpay", "amazon", "gestao", "cartão", "cartao", "oney", "bank", "banco",
-    "extrato", "seguro", "débito", "debito", "parcela", "recibo", "wise",
-    "transferência", "transferencia", "pagamento", "pagável", "paga", "fechou",
+    "financeiro", "fatura", "faturas", "pix", "boleto", "boletos",
+    "compra", "compras", "mercadopago",
+    "picpay", "amazon", "gestão", "gestao", "cartão", "cartão de crédito",
+    "cartao", "cartao de credito", "oney", "bank", "banco",
+    "débito automático", "debito automatico", "parcela", "parcelas",
+    "recibo", "recibos", "wise",
+    "transferência bancária", "transferencia bancaria",
+    "transferência", "transferencia", "pagamento", "pagamentos",
+    "pagável", "fechou", "fatura fechada",
 ]
 
 
@@ -966,13 +1012,13 @@ def infer_work_target(text: str) -> str | None:
             "contract has started",
         ],
     ):
-        return "01_PROFISSIONAL/CANDIDATURAS"
+        return "01_PROFI/CANDIDATURAS"
     if contains_any(text, ["upwork", "99freelas", "proposal", "freelance", "brief", "projeto", "cliente", "proposta", "convite para projeto"]):
-        return "01_PROFISSIONAL/PROJETOS-PJ"
+        return "01_PROFI/PROJETOS-PJ"
     if contains_any(text, ["alignerr", "cliente pj", "pj", "prestação de serviço", "prestacao de servico", "sme careers", "empresa cliente"]):
-        return "01_PROFISSIONAL/PROJETOS-PJ"
+        return "01_PROFI/PROJETOS-PJ"
     if contains_any(text, WORK_TERMS):
-        return "01_PROFISSIONAL/VAGAS"
+        return "01_PROFI/VAGAS"
     return None
 
 
@@ -984,6 +1030,14 @@ def is_course_promotion(text: str) -> bool:
         "bônus surpresa", "bonus surpresa",
     ]
     return contains_any(text, course_terms)
+
+
+def is_commercial_promotion(text: str) -> bool:
+    if is_job_blast(text):
+        return False
+    if is_technical_newsletter(text):
+        return False
+    return contains_any(text, COMMERCIAL_PROMO_TERMS)
 
 
 def is_security_urgent(text: str) -> bool:
@@ -1010,7 +1064,9 @@ def is_job_blast(text: str) -> bool:
     job_terms = [
         "vaga", "vagas", "home office", "oportunidades", "candidate-se",
         "está contratando", "esta contratando", "job", "jobs",
-        "career opportunities", "oportunidade",
+        "career opportunities", "oportunidade", "oportunidade de emprego",
+        "hiring", "we are hiring", "join our team", "work with us",
+        "recruiting", "recruitment",
     ]
     return contains_any(text, job_terms)
 

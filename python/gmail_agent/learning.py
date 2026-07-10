@@ -43,7 +43,12 @@ def empty_learning_state() -> dict[str, Any]:
     }
 
 
-def rebuild_learning_state(report: dict[str, Any], min_sender_hits: int = 1, min_domain_hits: int = 2) -> dict[str, Any]:
+def rebuild_learning_state(
+    report: dict[str, Any],
+    min_sender_hits: int = 2,
+    min_domain_hits: int = 3,
+    min_confidence: float = 0.8,
+) -> dict[str, Any]:
     labels = report.get("labels", [])
     label_lookup = {label["id"]: label["name"] for label in labels}
     sender_counts: dict[str, Counter] = defaultdict(Counter)
@@ -68,8 +73,16 @@ def rebuild_learning_state(report: dict[str, Any], min_sender_hits: int = 1, min
         if "@" in sender_email:
             domain_counts[sender_email.split("@", 1)[1]][learned_target] += 1
 
-    sender_rules = _collapse_counters(sender_counts, min_hits=min_sender_hits)
-    domain_rules = _collapse_counters(domain_counts, min_hits=min_domain_hits)
+    sender_rules = _collapse_counters(
+        sender_counts,
+        min_hits=min_sender_hits,
+        min_confidence=min_confidence,
+    )
+    domain_rules = _collapse_counters(
+        domain_counts,
+        min_hits=min_domain_hits,
+        min_confidence=min_confidence,
+    )
 
     logger.info(
         "Aprendizado: %d mensagens consideradas, %d com label de classificacao, "
@@ -96,22 +109,27 @@ def extract_sender_email(sender_value: str) -> str:
 
 def _extract_learning_target(resolved_labels: list[str]) -> str | None:
     """
-    BUG-8 corrigido: em vez de retornar always o primeiro label de classificacao encontrado,
-    retorna o label com MAIOR prioridade (menor índice em LEARNING_TARGETS),
-    priorizando labels mais específicas como URGENTE sobre REVISAR.
+    Apenas aprende de labels APLICADAS MANUALMENTE pelo utilizador
+    (labels legadas AGENTE/* etc.), ignorando labels TARGET já aplicadas
+    automaticamente pelo sistema. Isto evita o ciclo de reforço negativo
+    onde o sistema aprendia das suas próprias classificações.
     """
     preferred = [
         normalized
         for label in resolved_labels
-        if (normalized := label_to_target(label)) in LEARNING_TARGETS
+        if label not in LEARNING_TARGETS  # Ignorar labels aplicadas pelo sistema
+        and (normalized := label_to_target(label)) in LEARNING_TARGETS
     ]
     if not preferred:
         return None
-    # Ordenar por prioridade (menor índice = maior prioridade) e retornar o melhor
     return min(preferred, key=lambda lbl: _LABEL_PRIORITY.get(lbl, len(LEARNING_TARGETS)))
 
 
-def _collapse_counters(counter_map: dict[str, Counter], min_hits: int) -> dict[str, dict[str, Any]]:
+def _collapse_counters(
+    counter_map: dict[str, Counter],
+    min_hits: int,
+    min_confidence: float,
+) -> dict[str, dict[str, Any]]:
     collapsed = {}
     for key, counts in counter_map.items():
         if not counts:
@@ -119,13 +137,18 @@ def _collapse_counters(counter_map: dict[str, Counter], min_hits: int) -> dict[s
         most_common = counts.most_common(2)
         winner, winner_count = most_common[0]
         runner_up_count = most_common[1][1] if len(most_common) > 1 else 0
+        total = sum(counts.values())
+        confidence = winner_count / total
         if winner_count < min_hits:
             continue
         if winner_count <= runner_up_count:
             continue
+        if confidence < min_confidence:
+            continue
         collapsed[key] = {
             "target_label": winner,
             "hits": winner_count,
+            "confidence": confidence,
             "alternatives": dict(counts),
         }
     return collapsed

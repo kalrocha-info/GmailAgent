@@ -85,3 +85,10 @@ gmail-agent maintain-recent --limit 300 --recent-days 7 --learning-days 14
 ```
 
 O fluxo recomendado e agendar esse comando no Windows para rodar a cada 60 minutos.
+
+## Politicas de seguranca
+
+- Mensagens sem evidencias suficientes permanecem sem nova classificacao e aparecem no relatorio para revisao.
+- O aprendizado exige pelo menos duas decisoes consistentes por remetente e confianca minima de 80%.
+- O arquivamento tardio respeita a lista explicita de categorias arquivaveis; categorias urgentes e de acompanhamento permanecem na caixa de entrada.
+- `apply-filters --replace-existing` valida todas as labels antes de alterar filtros. Se a criacao de um novo filtro falhar, os novos filtros sao revertidos e os antigos sao preservados.

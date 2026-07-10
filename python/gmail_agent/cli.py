@@ -13,6 +13,7 @@ from .commands import (
     run_cleanup_labels,
     run_health_check,
     run_maintain_recent,
+    run_migrate_profi_labels,
     run_reclassify,
     run_reclassify_label,
     run_reclassify_query,
@@ -140,6 +141,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Quantidade maxima de mensagens dessa busca a reclassificar nesta execucao.",
     )
 
+    migrate_profi_labels = subparsers.add_parser(
+        "migrate-profi-labels",
+        help="Migra mensagens de 01_PROFISSIONAL/... para 01_PROFI/...",
+    )
+    migrate_profi_labels.add_argument(
+        "--limit-per-label",
+        type=int,
+        default=1000,
+        help="Quantidade maxima de mensagens processadas em cada label antiga.",
+    )
+
     cleanup_labels = subparsers.add_parser("cleanup-labels", help="Exclui apenas labels legadas vazias e seguras.")
     cleanup_labels.add_argument(
         "--limit",
@@ -227,6 +239,10 @@ def main() -> int:
 
         if args.command == "reclassify-query":
             print(run_reclassify_query(query=args.query, limit=args.limit), flush=True)
+            return 0
+
+        if args.command == "migrate-profi-labels":
+            print(run_migrate_profi_labels(limit_per_label=args.limit_per_label), flush=True)
             return 0
 
         if args.command == "cleanup-labels":
